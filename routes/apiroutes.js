@@ -1,0 +1,330 @@
+const express = require("express");
+const user = require("../models/userModal");
+const router = express.Router();
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const connect = require("../Config/dbconfig");
+const patient = require("../models/patientModal");
+const Tablet = require("../models/tabletsModal");
+const ImageKit = require("imagekit");
+const Report = require("../models/reportsModal");
+const Slot = require("../models/slotModal");
+
+var imagekit = new ImageKit({
+    publicKey: "public_bIVsnVmys/a5fZiFVHIfljPyGDs=",
+    privateKey: "private_9WWojQ+nJhqyiFbSudmN36951W4=",
+    urlEndpoint: "https://ik.imagekit.io/abdulhamid109"
+});
+connect();
+
+
+router.get("/", (req, res) => {
+    res.send("This is the Home Page URL Calling from Backend");
+});
+
+
+router.post("/auth/signup", async (req, res) => {
+    try {
+        const { name, email, phoneno, password } = req.body;
+        if (!name || !email || !phoneno || !password) {
+            console.log("Field empty...");
+            res.status(404).json({ error: "Missing values" });
+        }
+        const db = await user.findOne({ email });
+        if (db) {
+            console.log("Account already exists");
+            res.status(404).json({ error: "Account already exists....Signup" });
+        }
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const newuser = new user({
+            name,
+            email,
+            phoneno,
+            password: hashedPassword
+        });
+
+        const saveduser = await newuser.save();
+
+        return res.status(200).json(
+            { success: true, message: "Successfully account created" },
+        )
+
+    } catch (error) {
+        res.status(500).json(
+            { error: "Error => " + error }
+        )
+    }
+});
+
+
+router.post("/auth/login", async (req, res) => {
+    try {
+        const { phoneno } = req.body;
+        if (!phoneno) {
+            return res.status(404).json(
+                { error: "Kindly enter the" }
+            )
+        }
+        const db = await user.findOne({ phoneno });
+        if (!db) {
+            console.log("Account not found...signup");
+            return res.status(404).json(
+                { error: "Account not found...signup" }
+            )
+        }
+
+        const payloadData = {
+            email: db.email,
+            uid: db._id,
+        }
+
+        const token = jwt.sign(payloadData, process.env.SECRET_KEY, { expiresIn: "1d" });
+        return res.status(200).json(
+            { success: true, message: "Successfully logged in", token }
+        );
+
+    } catch (error) {
+        console.log("Internal Server error" + error);
+        return res.status(500).json(
+            { error: "Internal Server error" + error },
+        )
+    }
+});
+
+
+router.post("/profile", async (req, res) => {
+    try {
+        const { token } = await req.body;
+        if (!token) {
+            return res.status(401).json(
+                { error: "Unauthorized user" },
+            )
+        }
+        const data = jwt.verify(token, process.env.SECRET_KEY,);
+
+        const uidd = data.uid;
+        console.log("UID" + uidd);
+        const userdb = await user.findById(uidd);
+        console.log("User=>" + userdb);
+        return res.status(200).json(
+            { success: true, message: "successfully fetched the user", user: userdb }
+        )
+    } catch (error) {
+        console.log("Internal Server error =>" + error);
+        return res.status(500).json(
+            { error: "Internal server error => " + error }
+        )
+    }
+});
+
+router.post("/updateprofile/:id", async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { name, email, phoneno, address } = req.body;
+        if (!id) {
+            console.log("Unauthorized user");
+            res.status(401).json(
+                { error: "Unauthorized user" }
+            )
+        }
+
+        const userdb = await user.findByIdAndUpdate(id, {
+            name, email, phoneno, address
+        });
+
+        return res.status(200).json(
+            { success: true, message: "Successfully updated the data", user: userdb }
+        );
+
+
+
+    } catch (error) {
+        console.log("Internal server error " + error);
+        return res.status(500).json(
+            { error: "Internal server error" + error }
+        )
+    }
+});
+
+router.post("/addpatientData", async (req, res) => {
+    try {
+        const { guardianId, patientName, patientAge, patientGender,phoneNumber ,Address } = await req.body;
+        const newpatient = await patient.create({
+            guardianId,
+            patientName,
+            patientAge,
+            patientGender,
+            phoneNumber,
+            Address
+        });
+
+        return res.status(200).json(
+            {
+                success: true,
+                message: "Successfully updated the patients details",
+                patient: newpatient
+            }
+        )
+    } catch (error) {
+        console.log("Internal server error" + error);
+        return res.status(500).json(
+            { error: "Internal Server error " + error },
+        )
+    }
+});
+
+router.post("/addtablets", async (req, res) => {
+    try {
+        const { guardianId, patientId, tabletName, tabletFrequencey, CourseDuration,SlotType,SlotStartTime,SlotEndTime, illnessType } = await req.body;
+        const newtablets = new Tablet({
+            guardianId,
+            patientId,
+            tabletName,
+            tabletFrequencey,
+            CourseDuration,
+            SlotType,
+            SlotStartTime,
+            SlotEndTime,
+            illnessType
+        });
+
+        const savedTablet = await newtablets.save();
+        console.log("New Tablet Record" + savedTablet);
+        return res.status(200).json(
+            {
+                success: true,
+                message: "Successfully added the tablets",
+                tablets: savedTablet
+            }
+        )
+
+    } catch (error) {
+        console.log("Internal Server error" + error);
+        return res.status(500).json(
+            { error: "Internal Server error" + error }
+        )
+    }
+});
+
+router.post("/addreports", async (req, res) => {
+    try {
+        const file = req.body;
+        
+        const response = await imagekit.upload({
+            file,
+            fileName:req.query.reportName,
+            folder:'/careus-reports'
+        });
+
+        const newreport = new Report({
+            GuardianId:req.query.GuardianId,
+            patientId:req.query.patientId,
+            reportName:req.query.reportName,
+            reportPicLink:response.url,
+            HospitalName:req.query.HospitalName,
+        });
+
+        const savedreport = await newreport.save();
+        console.log("New Report Record" + savedreport);
+        return res.status(200).json(
+            {
+                success: true,
+                message: "Successfully added the report",
+                reports: savedreport
+            }
+        )
+
+    } catch (error) {
+        console.log("Internal Server error" + error);
+        return res.status(500).json(
+            { error: "Internal Server error" + error }
+        )
+    }
+});
+
+router.post('/addslot',async(req,res)=>{
+    try {
+        const {guardianId,patientId,SlotType,SlotStartTime,SlotEndTime} = await req.body;
+        const newSlot = new Slot({
+            guardianId,
+            patientId,
+            SlotType,
+            SlotStartTime,
+            SlotEndTime
+        });
+        const saveSlot = await Slot.save();
+        console.log("Successfully saved the slot "+saveSlot);
+        return res.status(200).json(
+            {
+                success:true,
+                message:"Successfully added the slot",
+                slot:saveSlot
+            }
+        );
+    } catch (error) {
+        console.log("Internal Server error"+error);
+        return res.status(500).json(
+            {error:"Internal server error"+error}
+        )
+    }
+})
+
+
+router.get('/getallpatients/:id',async(req,res)=>{
+    try {
+        const uid = req.params.id;
+        if(!uid){
+            res.status(401).json(
+                {error:"Un-authorized user"}
+            )
+        }
+        const userdb = await patient.find({guardianId:uid});
+        if(!userdb){
+            res.status(403).json(
+                {error:"No Patients Found"}
+            )
+        }
+        return res.status(200).json(
+            {
+                "success":true,
+                "message":"Successfully fetched all the information",
+                "Patients":userdb
+            }
+        )
+
+    } catch (error) {
+        res.status(500).json(
+            {error:"Internal Server error =>"+error}
+        )
+    }
+});
+
+router.delete('/deletePatient/:pid',async(req,res)=>{
+    try {
+        const p_uid = req.params.pid;
+        if(!p_uid){
+            res.status(401).json(
+                {
+                    error:"No Patient id found"
+                }
+            )
+        }
+        const deletePatient = await patient.findByIdAndDelete(p_uid);
+        return res.status(200).json(
+            {
+                "success":true,
+                "message":"Successfully deleted the object",
+                deletePatient
+            }
+        )
+    } catch (error) {
+        res.status(500).json(
+            {error:"Internal Server error"+error}
+        )
+    }
+})
+//Edit patients details routes
+
+module.exports = router;
