@@ -64,7 +64,7 @@ router.post("/auth/login", async (req, res) => {
         const { phoneno } = req.body;
         if (!phoneno) {
             return res.status(404).json(
-                { error: "Kindly enter the" }
+                { error: "Kindly enter the phone no" }
             )
         }
         const db = await user.findOne({ phoneno });
@@ -325,6 +325,44 @@ router.delete('/deletePatient/:pid',async(req,res)=>{
         )
     }
 })
+
+//getting a single patient data
+router.get('/getPatientPersonalData/:pid',async(req,res)=>{
+    try{
+        const pid = req.params.pid;
+        const patientdb = await patient.findById(pid);
+        if(!patientdb){
+            console.log("No Data found");
+            res.status(401).json(
+                {error:"Unauthorized user"}
+            )
+        }
+
+        return res.status(200).json({
+            success:true,
+            message:"Successfully fetched the patient data",
+            patient:patientdb
+        });
+    }catch(error){
+        console.log("Internal Server error "+error);
+        res.status(500).json(
+            {error:"Internal Server error"+error}
+        )
+    }
+});
+
+router.get('/getPatientReport/:pid',async(req,res)=>{
+    try {
+        const pid = req.params.pid;
+        
+    } catch (error) {
+        console.log("Internal Server error"+error);
+        return res.status(500).json(
+            {error:"Internal Server error"+error}
+        )
+    }
+})
 //Edit patients details routes
+
 
 module.exports = router;
