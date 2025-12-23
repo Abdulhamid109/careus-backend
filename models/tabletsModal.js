@@ -28,9 +28,7 @@ const TabletModal = new mongoose.Schema({
     },
     // if the user selects the morning slot then it should consider the time span as 6:00am to 12:00pm
     SlotStartTime:{
-        time:{
-            type:String
-        },
+        type:String
     },
     SlotEndTime:{
         type:String
