@@ -351,9 +351,28 @@ router.get('/getPatientPersonalData/:pid',async(req,res)=>{
     }
 });
 
-router.get('/getPatientReport/:pid',async(req,res)=>{
+router.get('/getPatientTablet/:pid',async(req,res)=>{
     try {
         const pid = req.params.pid;
+        if(!pid){
+            return res.status(401).json(
+                {error:"Un-authorized User"}
+            )
+        }
+        const patientdb = await Tablet.find({patientId:pid});
+        if(!patientdb){
+            console.log("Patient is not Present in the record");
+            return res.status(404).json(
+                {error:"Patient Tablets data not found"}
+            )
+        }
+        return res.status(200).json(
+            {
+                success:true,
+                "message":"Successfully fetched the data",
+                patients:patientdb
+            }
+        )
         
     } catch (error) {
         console.log("Internal Server error"+error);
