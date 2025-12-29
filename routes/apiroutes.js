@@ -9,6 +9,7 @@ const Tablet = require("../models/tabletsModal");
 const ImageKit = require("imagekit");
 const Report = require("../models/reportsModal");
 const Slot = require("../models/slotModal");
+const cron = require("node-cron");
 
 var imagekit = new ImageKit({
     publicKey: "public_bIVsnVmys/a5fZiFVHIfljPyGDs=",
@@ -18,7 +19,20 @@ var imagekit = new ImageKit({
 connect();
 
 
+const demofunction = (count) => {
+    console.log("Our Cron is getting executed inside the REST based GET Request =>" + count)
+}
+
 router.get("/", (req, res) => {
+    var count = 0;
+    const task = cron.schedule('* * * * * *', () => {
+        count += 1;
+        demofunction(count);
+        if (count == 10) {
+            console.log("Cron Job stopped on 10th execution");
+            task.stop();
+        }
+    });
     res.send("This is the Home Page URL Calling from Backend");
 });
 
@@ -150,7 +164,7 @@ router.post("/updateprofile/:id", async (req, res) => {
 
 router.post("/addpatientData", async (req, res) => {
     try {
-        const { guardianId, patientName, patientAge, patientGender,phoneNumber ,Address } = await req.body;
+        const { guardianId, patientName, patientAge, patientGender, phoneNumber, Address } = await req.body;
         const newpatient = await patient.create({
             guardianId,
             patientName,
@@ -175,55 +189,87 @@ router.post("/addpatientData", async (req, res) => {
     }
 });
 
+//need to update the values based on the modified schema
 router.post("/addtablets", async (req, res) => {
     try {
-        const { guardianId, patientId, tabletName, tabletFrequencey, CourseDuration,SlotType,SlotStartTime,SlotEndTime, illnessType } = await req.body;
-        const newtablets = new Tablet({
+        // Log the incoming request body for debugging
+        console.log("Request Body:", req.body);
+
+        // Destructure the request body
+        const {
             guardianId,
             patientId,
+            illnessType,
             tabletName,
             tabletFrequencey,
             CourseDuration,
-            SlotType,
-            SlotStartTime,
-            SlotEndTime,
-            illnessType
+            MorningSlot,
+            AfternoonSlot,
+            EveningSlot,
+        } = req.body;
+
+        // Log the destructured values for debugging
+        console.log("MorningSlot:", MorningSlot);
+        console.log("AfternoonSlot:", AfternoonSlot);
+        console.log("EveningSlot:", EveningSlot);
+
+        const newtablets = new Tablet({
+            guardianId,
+            patientId,
+            illnessType,
+            tabletName,
+            tabletFrequencey,
+            CourseDuration,
+            MorningSlot: {
+                SlotSelected: MorningSlot.SlotSelected,
+                SlotStartTime: MorningSlot.SlotStartTime,
+                SlotEndTime: MorningSlot.SlotEndTime,
+            },
+            AfternoonSlot: {
+                SlotSelected: AfternoonSlot.SlotSelected,
+                SlotStartTime: AfternoonSlot.SlotStartTime,
+                SlotEndTime: AfternoonSlot.SlotEndTime,
+            },
+            EveningSlot: {
+                SlotSelected: EveningSlot.SlotSelected,
+                SlotStartTime: EveningSlot.SlotStartTime,
+                SlotEndTime: EveningSlot.SlotEndTime,
+            },
         });
 
         const savedTablet = await newtablets.save();
-        console.log("New Tablet Record" + savedTablet);
-        return res.status(200).json(
-            {
-                success: true,
-                message: "Successfully added the tablets",
-                tablets: savedTablet
-            }
-        )
+        console.log("New Tablet Record:", savedTablet);
 
+        // TODO:IVR cron job needs to be scheduled from here
+
+        return res.status(200).json({
+            success: true,
+            message: "Successfully added the tablets",
+            tablets: savedTablet,
+        });
     } catch (error) {
-        console.log("Internal Server error" + error);
-        return res.status(500).json(
-            { error: "Internal Server error" + error }
-        )
+        console.log("Internal Server Error:", error);
+        return res.status(500).json({ error: "Internal Server Error: " + error });
     }
 });
+
 
 router.post("/addreports", async (req, res) => {
     try {
         const file = req.body;
-        
+
         const response = await imagekit.upload({
             file,
-            fileName:req.query.reportName,
-            folder:'/careus-reports'
+            fileName: req.query.reportName,
+            folder: '/careus-reports'
         });
 
         const newreport = new Report({
-            GuardianId:req.query.GuardianId,
-            patientId:req.query.patientId,
-            reportName:req.query.reportName,
-            reportPicLink:response.url,
-            HospitalName:req.query.HospitalName,
+            GuardianId: req.query.GuardianId,
+            patientId: req.query.patientId,
+            reportName: req.query.reportName,
+            reportPicLink: response.url,
+            HospitalName: req.query.HospitalName,
         });
 
         const savedreport = await newreport.save();
@@ -244,9 +290,9 @@ router.post("/addreports", async (req, res) => {
     }
 });
 
-router.post('/addslot',async(req,res)=>{
+router.post('/addslot', async (req, res) => {
     try {
-        const {guardianId,patientId,SlotType,SlotStartTime,SlotEndTime} = await req.body;
+        const { guardianId, patientId, SlotType, SlotStartTime, SlotEndTime } = await req.body;
         const newSlot = new Slot({
             guardianId,
             patientId,
@@ -255,133 +301,232 @@ router.post('/addslot',async(req,res)=>{
             SlotEndTime
         });
         const saveSlot = await Slot.save();
-        console.log("Successfully saved the slot "+saveSlot);
+        console.log("Successfully saved the slot " + saveSlot);
         return res.status(200).json(
             {
-                success:true,
-                message:"Successfully added the slot",
-                slot:saveSlot
+                success: true,
+                message: "Successfully added the slot",
+                slot: saveSlot
             }
         );
     } catch (error) {
-        console.log("Internal Server error"+error);
+        console.log("Internal Server error" + error);
         return res.status(500).json(
-            {error:"Internal server error"+error}
+            { error: "Internal server error" + error }
         )
     }
-})
+});
 
 
-router.get('/getallpatients/:id',async(req,res)=>{
+router.get('/getallpatients/:id', async (req, res) => {
     try {
         const uid = req.params.id;
-        if(!uid){
+        if (!uid) {
             res.status(401).json(
-                {error:"Un-authorized user"}
+                { error: "Un-authorized user" }
             )
         }
-        const userdb = await patient.find({guardianId:uid});
-        if(!userdb){
+        const userdb = await patient.find({ guardianId: uid });
+        if (!userdb) {
             res.status(403).json(
-                {error:"No Patients Found"}
+                { error: "No Patients Found" }
             )
         }
         return res.status(200).json(
             {
-                "success":true,
-                "message":"Successfully fetched all the information",
-                "Patients":userdb
+                "success": true,
+                "message": "Successfully fetched all the information",
+                "Patients": userdb
             }
         )
 
     } catch (error) {
         res.status(500).json(
-            {error:"Internal Server error =>"+error}
+            { error: "Internal Server error =>" + error }
         )
     }
 });
 
-router.delete('/deletePatient/:pid',async(req,res)=>{
+router.delete('/deletePatient/:pid', async (req, res) => {
     try {
         const p_uid = req.params.pid;
-        if(!p_uid){
+        if (!p_uid) {
             res.status(401).json(
                 {
-                    error:"No Patient id found"
+                    error: "No Patient id found"
                 }
             )
         }
         const deletePatient = await patient.findByIdAndDelete(p_uid);
         return res.status(200).json(
             {
-                "success":true,
-                "message":"Successfully deleted the object",
+                "success": true,
+                "message": "Successfully deleted the object",
                 deletePatient
             }
         )
     } catch (error) {
         res.status(500).json(
-            {error:"Internal Server error"+error}
-        )
-    }
-})
-
-//getting a single patient data
-router.get('/getPatientPersonalData/:pid',async(req,res)=>{
-    try{
-        const pid = req.params.pid;
-        const patientdb = await patient.findById(pid);
-        if(!patientdb){
-            console.log("No Data found");
-            res.status(401).json(
-                {error:"Unauthorized user"}
-            )
-        }
-
-        return res.status(200).json({
-            success:true,
-            message:"Successfully fetched the patient data",
-            patient:patientdb
-        });
-    }catch(error){
-        console.log("Internal Server error "+error);
-        res.status(500).json(
-            {error:"Internal Server error"+error}
+            { error: "Internal Server error" + error }
         )
     }
 });
 
-router.get('/getPatientTablet/:pid',async(req,res)=>{
+//getting a single patient data
+router.get('/getPatientPersonalData/:pid', async (req, res) => {
     try {
         const pid = req.params.pid;
-        if(!pid){
-            return res.status(401).json(
-                {error:"Un-authorized User"}
+        const patientdb = await patient.findById(pid);
+        if (!patientdb) {
+            console.log("No Data found");
+            res.status(401).json(
+                { error: "Unauthorized user" }
             )
         }
-        const patientdb = await Tablet.find({patientId:pid});
-        if(!patientdb){
+
+        return res.status(200).json({
+            success: true,
+            message: "Successfully fetched the patient data",
+            patient: patientdb
+        });
+    } catch (error) {
+        console.log("Internal Server error " + error);
+        res.status(500).json(
+            { error: "Internal Server error" + error }
+        )
+    }
+});
+
+router.get('/getPatientTablet/:pid', async (req, res) => {
+    try {
+        const pid = req.params.pid;
+        if (!pid) {
+            return res.status(401).json(
+                { error: "Un-authorized User" }
+            )
+        }
+        const patientdb = await Tablet.find({ patientId: pid });
+        if (!patientdb) {
             console.log("Patient is not Present in the record");
             return res.status(404).json(
-                {error:"Patient Tablets data not found"}
+                { error: "Patient Tablets data not found" }
             )
         }
         return res.status(200).json(
             {
-                success:true,
-                "message":"Successfully fetched the data",
-                patients:patientdb
+                success: true,
+                "message": "Successfully fetched the data",
+                patients: patientdb
             }
         )
-        
+
     } catch (error) {
-        console.log("Internal Server error"+error);
+        console.log("Internal Server error" + error);
         return res.status(500).json(
-            {error:"Internal Server error"+error}
+            { error: "Internal Server error" + error }
         )
     }
-})
-//Edit patients details routes
+});
+//Edit patients details routes -- little bit of changes require as per the new schema configuration
+router.put('/updateMedicalhistory/:pid', async (req, res) => {
+    try {
+        const pid = req.params.pid;
+        if (!pid) {
+            console.log("Unauthorized User");
+            res.status(401).json(
+                { error: "Un-authorized user" }
+            )
+        }
+        const { illnessType, tabletName, tabletFrequencey, CourseDuration, MorningSlot, AfternoonSlot, EveningSlot } = req.body;
+        console.log(illnessType);
+        console.log(tabletName);
+        console.log(tabletFrequencey);
+        console.log(CourseDuration);
+        console.log("--------Slot Information--------")
+
+        console.log(MorningSlot.SlotSelected);
+        console.log(MorningSlot.SlotStartTime);
+        console.log(MorningSlot.SlotEndTime);
+
+
+        const updateMedicalTabletData = await Tablet.findOneAndUpdate(
+            {
+                patientId: pid
+            },
+            {
+                illnessType,
+                tabletName,
+                tabletFrequencey,
+                CourseDuration,
+                MorningSlot: {
+                    SlotSelected: MorningSlot.SlotSelected,
+                    SlotStartTime: MorningSlot.SlotStartTime,
+                    SlotEndTime: MorningSlot.SlotEndTime
+                },
+                AfternoonSlot: {
+                    SlotSelected: AfternoonSlot.SlotSelected,
+                    SlotStartTime: AfternoonSlot.SlotStartTime,
+                    SlotEndTime: AfternoonSlot.SlotEndTime
+                },
+                EveningSlot: {
+                    SlotSelected: EveningSlot.SlotSelected,
+                    SlotStartTime: EveningSlot.SlotStartTime,
+                    SlotEndTime: EveningSlot.SlotEndTime
+                }
+            }
+        );
+
+        res.status(200).json(
+            {
+                success: true,
+                message: "Successfully updated the medical history",
+                data: updateMedicalTabletData
+            }
+        )
+    } catch (error) {
+        console.log("Internal server error " + error);
+        res.status(500).json(
+            {
+                error: "Internal Server error" + error
+            }
+        )
+    }
+});
+
+
+router.get("/tabletInfo/:id", async (req, res) => {
+    try {
+        // just for rememberance=>
+        // after the user enters the tablet info then start the cron job 
+        const id = req.params.id;
+        if (!id) {
+            return res.status(401).json(
+                { error: "Unauhtorized" }
+            )
+        }
+        const tabletdb = await Tablet.findById(id);
+        if (!tabletdb) {
+            console.log("No Tablet Info found");
+            return res.status(404).json(
+                { error: "No tabs (something went wrong)" }
+            )
+        }
+        return res.status(200).json(
+            {
+                success: true,
+                message: "Successfully fetched the tablet data",
+                tablet: tabletdb
+            }
+        )
+    } catch (error) {
+        console.log("Internal Server error");
+        res.status(500).json(
+            { error: "Internal server error" + error }
+        )
+    }
+});
+
+
 
 
 module.exports = router;
