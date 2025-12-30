@@ -15,10 +15,6 @@ const cron = require("node-cron");
 
 
 
-cron.schedule(' * * * * *',()=>{
-    console.log("Playing with the cron jobs in nodejs"+Date.now())
-})
-
 
 
 const PORT = process.env.PORT || 3000

@@ -10,6 +10,7 @@ const ImageKit = require("imagekit");
 const Report = require("../models/reportsModal");
 const Slot = require("../models/slotModal");
 const cron = require("node-cron");
+const twilio = require("twilio");
 
 var imagekit = new ImageKit({
     publicKey: "public_bIVsnVmys/a5fZiFVHIfljPyGDs=",
@@ -427,7 +428,7 @@ router.get('/getPatientTablet/:pid', async (req, res) => {
         )
     }
 });
-//Edit patients details routes -- little bit of changes require as per the new schema configuration
+
 router.put('/updateMedicalhistory/:pid', async (req, res) => {
     try {
         const pid = req.params.pid;
@@ -525,6 +526,82 @@ router.get("/tabletInfo/:id", async (req, res) => {
         )
     }
 });
+
+// creating an twilio client
+const client = twilio(process.env.TWILIO_ACCOUNT_SID,process.env.TWILIO_AUTH_TOKEN);
+router.post('/ivr/voice', (req, res) => {
+    try {
+        const twiml = new twilio.twiml.VoiceResponse();
+        twiml.say({
+            voice: 'Polly.Aditi',
+            language: 'en-IN',
+        }, "Welcome to Careus organization! Press 1 if you took medicine , Press 2 if you didn't, Press 3 if you wanna make a call to you guradian ")
+
+        const gather = twiml.gather({
+            numDigits: 1,
+            action: '/ivr/gather',
+            method: "POST"
+
+        });
+
+
+        gather.say("Please Press a number");
+        twiml.redirect('/ivr/voice');
+        res.type('text/xml');
+        res.send(twiml.toString());
+
+    } catch (error) {
+        console.log("Internal Server error" + error);
+        res.status(500).json(
+            { error: "Internal Server errror" + error }
+        )
+    }
+});
+
+//demo coede over here
+router.post('/ivr/gather', (req, res) => {
+    const twiml = new twilio.twiml.VoiceResponse();
+    const digits = req.body.Digits;
+
+    switch (digits) {
+        case "1":
+            twiml.say("Thank You for taking the medicine");
+            break;
+        case "2":
+            twiml.say("Please contact you guardian if you have any inconsistancy..")
+            break;
+        case "3":
+            twiml.say("We will be shorly connecting your call to your guardian ..for demo hunging the call");
+            twiml.hangup();
+            break;
+        default:
+            twiml.say('Invalid option. Please try again.');
+
+    }
+
+    twiml.redirect('/ivr/voice');
+    res.type('text/xml');
+    res.send(twiml.toString());
+});
+
+
+
+router.post('/ivr/makecall', async (req, res) => {
+    try {
+        const { phoneNumber } = await req.body;
+        const call = await client.calls.create({
+            url: "http://localhost:3000/ivr/voice",
+            to: "+919860573041",
+            from: process.env.TWILIO_PHONE_NUMBER,
+        });
+        res.status(200).json({ success: true, callSid: call.sid });
+    } catch (error) {
+        console.log("Internal Server error" + error);
+        return res.status(500).json(
+            { error: "Internal Server error" + error }
+        )
+    }
+})
 
 
 
