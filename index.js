@@ -10,6 +10,7 @@ connect;
 app.use(cors({origin:"*"}));
 app.use(express.json())
 app.use(express.raw({type:'multipart/form-data',limit:"10mb"}))
+app.use(express.urlencoded({ extended: false }));
 app.use("/api",apiRoutes);
 const cron = require("node-cron");
 

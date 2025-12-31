@@ -535,11 +535,11 @@ router.post('/ivr/voice', (req, res) => {
         twiml.say({
             voice: 'Polly.Aditi',
             language: 'en-IN',
-        }, "Welcome to Careus organization! Press 1 if you took medicine , Press 2 if you didn't, Press 3 if you wanna make a call to you guradian ")
+        }, "Welcome to Careus organization! Press 1 if you took medicine , Press 2 if you didn't, Press 3 if you wanna make a call to you guardian ")
 
         const gather = twiml.gather({
             numDigits: 1,
-            action: '/ivr/gather',
+            action: '/api/ivr/gather',
             method: "POST"
 
         });
@@ -554,23 +554,26 @@ router.post('/ivr/voice', (req, res) => {
         console.log("Internal Server error" + error);
         res.status(500).json(
             { error: "Internal Server errror" + error }
-        )
+        );
     }
 });
 
 //demo coede over here
 router.post('/ivr/gather', (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();
+    console.log("Body"+JSON.stringify(req.body));
     const digits = req.body.Digits;
 
     switch (digits) {
-        case "1":
+        case '1':
             twiml.say("Thank You for taking the medicine");
+            twiml.hangup();
             break;
-        case "2":
-            twiml.say("Please contact you guardian if you have any inconsistancy..")
+        case '2':
+            twiml.say("Please contact you guardian if you have any inconsistancy..");
+            twiml.hangup();
             break;
-        case "3":
+        case '3':
             twiml.say("We will be shorly connecting your call to your guardian ..for demo hunging the call");
             twiml.hangup();
             break;
@@ -590,7 +593,7 @@ router.post('/ivr/makecall', async (req, res) => {
     try {
         const { phoneNumber } = await req.body;
         const call = await client.calls.create({
-            url: "http://localhost:3000/ivr/voice",
+            url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
             to: "+919860573041",
             from: process.env.TWILIO_PHONE_NUMBER,
         });
