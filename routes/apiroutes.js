@@ -11,6 +11,7 @@ const Report = require("../models/reportsModal");
 const Slot = require("../models/slotModal");
 const cron = require("node-cron");
 const twilio = require("twilio");
+const TimeSplitter = require("../helpers/timeSplitter");
 
 var imagekit = new ImageKit({
     publicKey: "public_bIVsnVmys/a5fZiFVHIfljPyGDs=",
@@ -591,13 +592,48 @@ router.post('/ivr/gather', (req, res) => {
 
 router.post('/ivr/makecall', async (req, res) => {
     try {
-        const { phoneNumber } = await req.body;
-        const call = await client.calls.create({
-            url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
-            to: "+919860573041",
-            from: process.env.TWILIO_PHONE_NUMBER,
-        });
-        res.status(200).json({ success: true, callSid: call.sid });
+        const { phoneNumber,MorningSlot,AfternoonSlot,EveningSlot } = await req.body;
+        console.log("Somethign"+MorningSlot);
+        const IsMorningSlot = MorningSlot.SlotSelected;
+        const IsAfternoonSlot = AfternoonSlot.SlotSelected;
+        const IsEveningSlot = EveningSlot.SlotSelected;
+        const MorningSlotStartTime = MorningSlot.SlotStartTime;
+        const MorningSlotEndTime = MorningSlot.SlotEndTime;
+        const AfternoonSlotStartTime = AfternoonSlot.SlotStartTime;
+        const AfternoonSlotEndTime = AfternoonSlot.SlotEndTime;
+        const EveningSlotStartTime = EveningSlot.SlotStartTime;
+        const EveningSlotEndTime = EveningSlot.SlotEndTime;
+
+        if(IsMorningSlot){
+            const {starthour,startMinute,endhour,endMinute} = TimeSplitter(MorningSlotStartTime,MorningSlotEndTime);
+            console.log(starthour);
+            console.log(endhour);
+            console.log(startMinute);
+            console.log(endMinute);
+
+            //lets find the difference between the starttime and endtime (consider only hours)
+            const callno = (endhour-starthour)/2;
+            console.log("call no time "+callno);
+            const callathour = starthour+callno;
+            console.log("Scheduling hour => "+callathour);
+
+            
+
+            
+
+        }
+        
+        // schedular need to be done on this...
+        // const call = await client.calls.create({
+        //     url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
+        //     to: "+919860573041",
+        //     from: process.env.TWILIO_PHONE_NUMBER,
+        // });
+        res.status(200).json({ 
+            success: true,  
+            MorningSlot
+            // callSid: call.sid
+         });
     } catch (error) {
         console.log("Internal Server error" + error);
         return res.status(500).json(
