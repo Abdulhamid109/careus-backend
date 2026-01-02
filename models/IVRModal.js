@@ -6,16 +6,34 @@ const IVRModal = new mongoose.Schema({
     guardianId:{
         type:String
     },
+    patientId:{
+        type:String
+    },
     tabletId:{
         type:String
     },
     PatientPhoneNo:{
         type:String
     },
-    CallStatus:{
+    MorningCallStatus:{
         type:Boolean
-    }
+    },
+    AfternoonCallStatus:{
+        type:Boolean
+    },
+    EveningCallStatus:{
+        type:Boolean
+    },
+    callid:{
+        type:String
+    },
+
+    Date:{
+        type:Date,
+        unique:true
+    },
+
 });
 
-const IVR = await mongoose.models.ivr || mongoose.model('ivr',IVRModal);
+const IVR = mongoose.models.ivr || mongoose.model('ivr',IVRModal);
 module.exports = IVR;

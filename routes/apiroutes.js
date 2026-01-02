@@ -12,6 +12,7 @@ const Slot = require("../models/slotModal");
 const cron = require("node-cron");
 const twilio = require("twilio");
 const TimeSplitter = require("../helpers/timeSplitter");
+const IVR = require("../models/IVRModal");
 
 var imagekit = new ImageKit({
     publicKey: "public_bIVsnVmys/a5fZiFVHIfljPyGDs=",
@@ -176,6 +177,7 @@ router.post("/addpatientData", async (req, res) => {
             Address
         });
 
+
         return res.status(200).json(
             {
                 success: true,
@@ -242,7 +244,51 @@ router.post("/addtablets", async (req, res) => {
         const savedTablet = await newtablets.save();
         console.log("New Tablet Record:", savedTablet);
 
-        // TODO:IVR cron job needs to be scheduled from here
+        const now = new Date();
+        console.log("My Date => " + now.toLocaleDateString('en-IN'))
+
+
+        // TODO:IVR schema needs to be created from here needs to be scheduled from here
+        // The Schedular should be stopped after 30 days from now...
+        const patientdb = await patient.findById(patientId);
+        const pN = await patientdb["phoneNumber"];
+        console.log(pN)
+
+        const task = cron.schedule('0 6 * * *', async () => {
+            const newIvr = new IVR({
+                guardianId,
+                patientId,
+                tabletId: savedTablet._id,
+                PatientPhoneNo: pN,
+                Date: now.toLocaleString('en-IN')
+            });
+
+            const savedIVR = await newIvr.save();
+
+            return res.status(200).json(
+                {
+                    success: true,
+                    message: "Successfully saved the IVR details",
+                    IVR: savedIVR
+                }
+            )
+        });
+
+        console.log("timer started for =>" + CourseDuration + " days");
+        setTimeout(() => {
+            console.log("Finally time completed stopping the schdular");
+            task.stop();
+
+            return res.status(200).json({
+                success: true,
+                message: "Successfully completed the course duration..hence stoping the task",
+
+            })
+        }, parseInt(CourseDuration) * 24 * 60 * 60 * 1000);
+
+
+
+
 
         return res.status(200).json({
             success: true,
@@ -532,17 +578,18 @@ router.get("/tabletInfo/:id", async (req, res) => {
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 router.post('/ivr/voice', (req, res) => {
     try {
+
         const twiml = new twilio.twiml.VoiceResponse();
         twiml.say({
-            voice: 'Polly.Aditi',
+            voice: 'alice',
             language: 'en-IN',
         }, "Welcome to Careus organization! Press 1 if you took medicine , Press 2 if you didn't, Press 3 if you wanna make a call to you guardian ")
 
         const gather = twiml.gather({
             numDigits: 1,
             action: '/api/ivr/gather',
-            method: "POST"
-
+            method: "POST",
+            timeout: 5
         });
 
 
@@ -559,29 +606,42 @@ router.post('/ivr/voice', (req, res) => {
     }
 });
 
-//demo coede over here
 router.post('/ivr/gather', (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();
     console.log("Body" + JSON.stringify(req.body));
     const digits = req.body.Digits;
 
-    switch (digits) {
-        case '1':
-            twiml.say("Thank You for taking the medicine");
-            twiml.hangup();
-            break;
-        case '2':
-            twiml.say("Please contact you guardian if you have any inconsistancy..");
-            twiml.hangup();
-            break;
-        case '3':
-            twiml.say("We will be shorly connecting your call to your guardian ..for demo hunging the call");
-            twiml.hangup();
-            break;
-        default:
-            twiml.say('Invalid option. Please try again.');
+    if (!digits) {
+        twiml.say(
+            { voice: 'alice', language: 'en-IN' },
+            'Sorry, I did not receive any input. Please try again.'
+        );
+        twiml.redirect('/api/ivr/voice');
+    } else {
+        switch (digits) {
+            case '1':
+                //function to update the status of the call in the database
+                // need to check which section call is comming
+                tookMed(1);
+                twiml.say("Thank You for taking the medicine");
+                twiml.hangup();
+                break;
+            case '2':
+                //function to update the status of the call in the database
+                twiml.say("Please contact you guardian if you have any inconsistancy..");
+                twiml.hangup();
+                break;
+            case '3':
+                //function to update the status of the call in the database
+                twiml.say("We will be shorly connecting your call to your guardian ..for demo hunging the call");
+                twiml.hangup();
+                break;
+            default:
+                twiml.say('Invalid option. Please try again.');
 
+        }
     }
+
 
     twiml.redirect('/ivr/voice');
     res.type('text/xml');
@@ -592,7 +652,7 @@ router.post('/ivr/gather', (req, res) => {
 
 router.post('/ivr/makecall', async (req, res) => {
     try {
-        const { phoneNumber, MorningSlot, AfternoonSlot, EveningSlot } = await req.body;
+        const { phoneNumber, MorningSlot, AfternoonSlot, EveningSlot, pid } = await req.body;
         console.log("Somethign" + MorningSlot);
         const IsMorningSlot = MorningSlot.SlotSelected;
         const IsAfternoonSlot = AfternoonSlot.SlotSelected;
@@ -620,7 +680,46 @@ router.post('/ivr/makecall', async (req, res) => {
             const min = Math.floor((callathour - hr) * 60);
 
 
+
+
+
+
+
             cron.schedule(`${min} ${hr} * * *`, async () => {
+                // schedular need to be done on this...
+                const call = await client.calls.create({
+                    url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
+                    to: "+919860573041",
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                });
+
+                //updating the ivr route here based on pid
+
+                    const updateIVR = await IVR.findOneAndUpdate({ patientId: pid }, { MorningCallStatus: true });
+                    console.log("Updated IVR data => " + updateIVR);
+                
+
+
+                res.status(200).json({
+                    success: true,
+                    message: "Successfully compelted the call",
+                    callid: call.sid,
+
+                });
+            });
+        }
+        //same for afternoon slot and same for evening slot
+
+        if (IsAfternoonSlot) {
+            const { starthour, startMinute, endhour, endMinute } = TimeSplitter(AfternoonSlotStartTime, AfternoonSlotEndTime);
+            const callno = (endhour - starthour) / 2;
+            console.log("call no time " + callno);
+            const callathour = starthour + callno;
+            console.log("Scheduling hour => " + callathour); //decomal time
+            const hr = Math.floor(callathour);
+            const min = Math.floor((callathour - hr) * 60);
+
+            cron.schedule(`${min} ${hr + 12} * * *`, async () => {
                 // schedular need to be done on this...
                 const call = await client.calls.create({
                     url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
@@ -633,17 +732,33 @@ router.post('/ivr/makecall', async (req, res) => {
                     message: "Successfully compelted the call",
                     callid: call.sid
                 });
-
-            })
+            });
         }
-        //same for afternoon slot and same for evening slot
 
+        if (IsEveningSlot) {
+            const { starthour, startMinute, endhour, endMinute } = TimeSplitter(EveningSlotStartTime, EveningSlotEndTime);
+            const callno = (endhour - starthour) / 2;
+            console.log("call no time " + callno);
+            const callathour = starthour + callno;
+            console.log("Scheduling hour => " + callathour); //decomal time
+            const hr = Math.floor(callathour);
+            const min = Math.floor((callathour - hr) * 60);
 
+            cron.schedule(`${min} ${hr + 12} * * *`, async () => {
+                // schedular need to be done on this...
+                const call = await client.calls.create({
+                    url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
+                    to: "+919860573041",
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                });
 
-
-
-
-
+                res.status(200).json({
+                    success: true,
+                    message: "Successfully compelted the call",
+                    callid: call.sid
+                });
+            });
+        }
 
 
         res.status(200).json({
@@ -659,6 +774,9 @@ router.post('/ivr/makecall', async (req, res) => {
         )
     }
 })
+
+
+
 
 
 
