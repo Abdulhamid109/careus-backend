@@ -529,7 +529,7 @@ router.get("/tabletInfo/:id", async (req, res) => {
 });
 
 // creating an twilio client
-const client = twilio(process.env.TWILIO_ACCOUNT_SID,process.env.TWILIO_AUTH_TOKEN);
+const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 router.post('/ivr/voice', (req, res) => {
     try {
         const twiml = new twilio.twiml.VoiceResponse();
@@ -562,7 +562,7 @@ router.post('/ivr/voice', (req, res) => {
 //demo coede over here
 router.post('/ivr/gather', (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();
-    console.log("Body"+JSON.stringify(req.body));
+    console.log("Body" + JSON.stringify(req.body));
     const digits = req.body.Digits;
 
     switch (digits) {
@@ -592,8 +592,8 @@ router.post('/ivr/gather', (req, res) => {
 
 router.post('/ivr/makecall', async (req, res) => {
     try {
-        const { phoneNumber,MorningSlot,AfternoonSlot,EveningSlot } = await req.body;
-        console.log("Somethign"+MorningSlot);
+        const { phoneNumber, MorningSlot, AfternoonSlot, EveningSlot } = await req.body;
+        console.log("Somethign" + MorningSlot);
         const IsMorningSlot = MorningSlot.SlotSelected;
         const IsAfternoonSlot = AfternoonSlot.SlotSelected;
         const IsEveningSlot = EveningSlot.SlotSelected;
@@ -604,36 +604,54 @@ router.post('/ivr/makecall', async (req, res) => {
         const EveningSlotStartTime = EveningSlot.SlotStartTime;
         const EveningSlotEndTime = EveningSlot.SlotEndTime;
 
-        if(IsMorningSlot){
-            const {starthour,startMinute,endhour,endMinute} = TimeSplitter(MorningSlotStartTime,MorningSlotEndTime);
+        if (IsMorningSlot) {
+            const { starthour, startMinute, endhour, endMinute } = TimeSplitter(MorningSlotStartTime, MorningSlotEndTime);
             console.log(starthour);
             console.log(endhour);
             console.log(startMinute);
             console.log(endMinute);
 
             //lets find the difference between the starttime and endtime (consider only hours)
-            const callno = (endhour-starthour)/2;
-            console.log("call no time "+callno);
-            const callathour = starthour+callno;
-            console.log("Scheduling hour => "+callathour);
+            const callno = (endhour - starthour) / 2;
+            console.log("call no time " + callno);
+            const callathour = starthour + callno;
+            console.log("Scheduling hour => " + callathour); //decomal time
+            const hr = Math.floor(callathour);
+            const min = Math.floor((callathour - hr) * 60);
 
-            
 
-            
+            cron.schedule(`${min} ${hr} * * *`, async () => {
+                // schedular need to be done on this...
+                const call = await client.calls.create({
+                    url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
+                    to: "+919860573041",
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                });
 
+                res.status(200).json({
+                    success: true,
+                    message: "Successfully compelted the call",
+                    callid: call.sid
+                });
+
+            })
         }
-        
-        // schedular need to be done on this...
-        // const call = await client.calls.create({
-        //     url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
-        //     to: "+919860573041",
-        //     from: process.env.TWILIO_PHONE_NUMBER,
-        // });
-        res.status(200).json({ 
-            success: true,  
-            MorningSlot
+        //same for afternoon slot and same for evening slot
+
+
+
+
+
+
+
+
+
+        res.status(200).json({
+            success: true,
+            // MorningSlot
+            message: "Schedular started...."
             // callSid: call.sid
-         });
+        });
     } catch (error) {
         console.log("Internal Server error" + error);
         return res.status(500).json(
