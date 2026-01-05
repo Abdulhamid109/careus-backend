@@ -33,7 +33,6 @@ const IVRModal = new mongoose.Schema({
 
     Date:{
         type:Date,
-        unique:true
     },
 
 });

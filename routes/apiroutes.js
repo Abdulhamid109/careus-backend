@@ -254,15 +254,15 @@ router.post("/addtablets", async (req, res) => {
         const pN = await patientdb["phoneNumber"];
         console.log(pN);
 
-        const newIvr = new IVR({
-            guardianId,
-            patientId,
-            tabletId: savedTablet._id,
-            PatientPhoneNo: pN,
-            Date: now.toLocaleString('en-IN')
-        });
+        // const newIvr = new IVR({
+        //     guardianId,
+        //     patientId,
+        //     tabletId: savedTablet._id,
+        //     PatientPhoneNo: pN,
+        //     Date: now.toLocaleString('en-IN')
+        // });
 
-        const savedIVR = await newIvr.save();
+        // const savedIVR = await newIvr.save();
 
 
 
@@ -645,7 +645,7 @@ router.post('/ivr/gather', (req, res) => {
 
 router.post('/ivr/makecall', async (req, res) => {
     try {
-        const { phoneNumber, MorningSlot, AfternoonSlot, EveningSlot, pid, tabletid ,guardianId} = await req.body;
+        const { phoneNumber, MorningSlot, AfternoonSlot, EveningSlot, pid, tabletid, guardianId } = await req.body;
         console.log("Somethign" + MorningSlot);
         const IsMorningSlot = MorningSlot.SlotSelected;
         const IsAfternoonSlot = AfternoonSlot.SlotSelected;
@@ -690,12 +690,10 @@ router.post('/ivr/makecall', async (req, res) => {
                         timezone: 'Asia/Kolkata'
                     });
 
-
                 res.status(200).json({
                     success: true,
                     message: "Successfully compelted the call",
                     callid: call.sid,
-
                 });
             });
         }
@@ -716,6 +714,12 @@ router.post('/ivr/makecall', async (req, res) => {
                     url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
                     to: "+919860573041",
                     from: process.env.TWILIO_PHONE_NUMBER,
+                    statusCallback: `https://217b052016b2.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
+                    statusCallbackMethod: "POST",
+                    statusCallbackEvent: ["initiated", "ringing", "answered", "completed"]
+
+                }, {
+                    timezone: 'Asia/Kolkata'
                 });
 
                 res.status(200).json({
@@ -741,6 +745,12 @@ router.post('/ivr/makecall', async (req, res) => {
                     url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
                     to: "+919860573041",
                     from: process.env.TWILIO_PHONE_NUMBER,
+                    statusCallback: `https://217b052016b2.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
+                    statusCallbackMethod: "POST",
+                    statusCallbackEvent: ["initiated", "ringing", "answered", "completed"]
+
+                }, {
+                    timezone: 'Asia/Kolkata'
                 });
 
                 res.status(200).json({
@@ -782,7 +792,12 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
         console.log("To => " + to)
         console.log("From => " + from)
         console.log("Tablet id => " + tabid)
-        console.log("Patient Id => " + patientId)
+        console.log("Patient Id => " + patientId);
+
+        const patientdb = await patient.findById(patientId);
+        const name = await patientdb["patientName"];
+        const guardiandb = await user.findById(guardianId);
+        const phoneno = await guardiandb["phoneno"];
 
         switch (callStatus) {
             case "ringing":
@@ -798,11 +813,11 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
                     const newivr = new IVR({
                         guardianId,
                         patientId,
-                        tabletId:tabid,
-                        PatientPhoneNo:to,
+                        tabletId: tabid,
+                        PatientPhoneNo: to,
                         MorningCallStatus: true,
                         callid: sid,
-                        Date:now.toLocaleDateString('en-IN')
+                        Date: now.toLocaleDateString('en-IN') //small issue make sure you make the time instance from date to zero....
                     });
 
                     const savedivr = await newivr.save();
@@ -811,18 +826,52 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
                         { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
                     );
                 } else if (slotType === "Afternoon") {
+                    const now = new Date();
+                    const newivr = new IVR({
+                        guardianId,
+                        patientId,
+                        tabletId: tabid,
+                        PatientPhoneNo: to,
+                        MorningCallStatus: true,
+                        callid: sid,
+                        Date: now.toLocaleDateString('en-IN') //small issue make sure you make the time instance from date to zero....
+                    });
+
+                    const savedivr = await newivr.save();
+
+                    return res.status(200).json(
+                        { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
+                    );
 
                 } else if (slotType === "Evening") {
+                    const now = new Date();
+                    const newivr = new IVR({
+                        guardianId,
+                        patientId,
+                        tabletId: tabid,
+                        PatientPhoneNo: to,
+                        MorningCallStatus: true,
+                        callid: sid,
+                        Date: now.toLocaleDateString('en-IN') //small issue make sure you make the time instance from date to zero....
+                    });
+
+                    const savedivr = await newivr.save();
+
+                    return res.status(200).json(
+                        { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
+                    );
 
                 }
                 console.log(`Call completed for user ${to} in Abdul Hamid Patel's workspace.`);
                 break;
             case "no-answer":
                 console.log(`Call not picked up by user ${to} in Abdul Hamid Patel's workspace.`);
+
                 await client.messages.create({
-                    body: 'Alert : Call Missed by the User',
+                    body: `Alert : Call Missed by the ${name}`,
                     from: process.env.TWILIO_PHONE_NUMBER,
-                    to: to //this phonenumber should be of guardian...
+                    // to: `+91${phoneno}` //this phonenumber should be of guardian...(done)
+                    to:to
                 });
                 break;
             case "busy":
@@ -830,9 +879,21 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
                 break;
             case "failed":
                 console.log(`Call failed for user ${to} in Abdul Hamid Patel's workspace.`);
+                await client.messages.create({
+                    body: `Alert : Call Missed by the ${name}`,
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                    // to: `+91${phoneno}` //this phonenumber should be of guardian...(done)
+                    to:to
+                });
                 break;
             case "canceled":
                 console.log(`Call canceled for user ${to} in Abdul Hamid Patel's workspace.`);
+                await client.messages.create({
+                    body: `Alert : Call Missed by the ${name}`,
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                    // to: `+91${phoneno}` //this phonenumber should be of guardian...(done)
+                    to:to
+                });
                 break;
             default:
                 console.log(`Unknown call status: ${callStatus} for user ${to} in Abdul Hamid Patel's workspace.`);
@@ -850,7 +911,9 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
     }
 })
 
-
+// need to focus on duration that after the duration is over the cronjob for particular tablet is should stop
+// and the user should have the permission to chnage the duration and based on that modify the cron job
+// once the duration is over the guardian should recive an alert for particular tablet.
 
 
 
