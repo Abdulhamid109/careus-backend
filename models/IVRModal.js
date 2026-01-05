@@ -16,13 +16,16 @@ const IVRModal = new mongoose.Schema({
         type:String
     },
     MorningCallStatus:{
-        type:Boolean
+        type:Boolean,
+        default:false
     },
     AfternoonCallStatus:{
-        type:Boolean
+        type:Boolean,
+        default:false
     },
     EveningCallStatus:{
-        type:Boolean
+        type:Boolean,
+        default:false
     },
     callid:{
         type:String

@@ -252,39 +252,31 @@ router.post("/addtablets", async (req, res) => {
         // The Schedular should be stopped after 30 days from now...
         const patientdb = await patient.findById(patientId);
         const pN = await patientdb["phoneNumber"];
-        console.log(pN)
+        console.log(pN);
 
-        const task = cron.schedule('0 6 * * *', async () => {
-            const newIvr = new IVR({
-                guardianId,
-                patientId,
-                tabletId: savedTablet._id,
-                PatientPhoneNo: pN,
-                Date: now.toLocaleString('en-IN')
-            });
-
-            const savedIVR = await newIvr.save();
-
-            return res.status(200).json(
-                {
-                    success: true,
-                    message: "Successfully saved the IVR details",
-                    IVR: savedIVR
-                }
-            )
+        const newIvr = new IVR({
+            guardianId,
+            patientId,
+            tabletId: savedTablet._id,
+            PatientPhoneNo: pN,
+            Date: now.toLocaleString('en-IN')
         });
 
+        const savedIVR = await newIvr.save();
+
+
+
         console.log("timer started for =>" + CourseDuration + " days");
-        setTimeout(() => {
-            console.log("Finally time completed stopping the schdular");
-            task.stop();
+        // setTimeout(() => {
+        //     console.log("Finally time completed stopping the schdular");
+        //     task.stop();
 
-            return res.status(200).json({
-                success: true,
-                message: "Successfully completed the course duration..hence stoping the task",
+        //     return res.status(200).json({
+        //         success: true,
+        //         message: "Successfully completed the course duration..hence stoping the task",
 
-            })
-        }, parseInt(CourseDuration) * 24 * 60 * 60 * 1000);
+        //     })
+        // }, parseInt(CourseDuration) * 24 * 60 * 60 * 1000);
 
 
 
@@ -292,8 +284,9 @@ router.post("/addtablets", async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Successfully added the tablets",
+            message: "Successfully added the tablets and created the instance of IVR",
             tablets: savedTablet,
+            IVR: savedIVR
         });
     } catch (error) {
         console.log("Internal Server Error:", error);
@@ -622,7 +615,7 @@ router.post('/ivr/gather', (req, res) => {
             case '1':
                 //function to update the status of the call in the database
                 // need to check which section call is comming
-                tookMed(1);
+                // tookMed(1);
                 twiml.say("Thank You for taking the medicine");
                 twiml.hangup();
                 break;
@@ -652,7 +645,7 @@ router.post('/ivr/gather', (req, res) => {
 
 router.post('/ivr/makecall', async (req, res) => {
     try {
-        const { phoneNumber, MorningSlot, AfternoonSlot, EveningSlot, pid } = await req.body;
+        const { phoneNumber, MorningSlot, AfternoonSlot, EveningSlot, pid, tabletid ,guardianId} = await req.body;
         console.log("Somethign" + MorningSlot);
         const IsMorningSlot = MorningSlot.SlotSelected;
         const IsAfternoonSlot = AfternoonSlot.SlotSelected;
@@ -663,6 +656,7 @@ router.post('/ivr/makecall', async (req, res) => {
         const AfternoonSlotEndTime = AfternoonSlot.SlotEndTime;
         const EveningSlotStartTime = EveningSlot.SlotStartTime;
         const EveningSlotEndTime = EveningSlot.SlotEndTime;
+        var SlotType = '';
 
         if (IsMorningSlot) {
             const { starthour, startMinute, endhour, endMinute } = TimeSplitter(MorningSlotStartTime, MorningSlotEndTime);
@@ -670,6 +664,7 @@ router.post('/ivr/makecall', async (req, res) => {
             console.log(endhour);
             console.log(startMinute);
             console.log(endMinute);
+            SlotType = "Morning";
 
             //lets find the difference between the starttime and endtime (consider only hours)
             const callno = (endhour - starthour) / 2;
@@ -680,24 +675,20 @@ router.post('/ivr/makecall', async (req, res) => {
             const min = Math.floor((callathour - hr) * 60);
 
 
-
-
-
-
-
             cron.schedule(`${min} ${hr} * * *`, async () => {
                 // schedular need to be done on this...
+                console.log("started")
                 const call = await client.calls.create({
-                    url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
+                    url: "https://217b052016b2.ngrok-free.app/api/ivr/voice",
                     to: "+919860573041",
                     from: process.env.TWILIO_PHONE_NUMBER,
-                });
-
-                //updating the ivr route here based on pid
-
-                    const updateIVR = await IVR.findOneAndUpdate({ patientId: pid }, { MorningCallStatus: true });
-                    console.log("Updated IVR data => " + updateIVR);
-                
+                    statusCallback: `https://217b052016b2.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
+                    statusCallbackMethod: "POST",
+                    statusCallbackEvent: ["initiated", "ringing", "answered", "completed"]
+                },
+                    {
+                        timezone: 'Asia/Kolkata'
+                    });
 
 
                 res.status(200).json({
@@ -775,7 +766,89 @@ router.post('/ivr/makecall', async (req, res) => {
     }
 })
 
+router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) => {
+    try {
+        const sid = req.body.CallSid;
+        const callStatus = req.body.CallStatus;
+        const to = req.body.To;
+        const from = req.body.From;
+        const tabid = req.params.tabletid;
+        const slotType = req.params.slottype;
+        const patientId = req.params.pid;
+        const guardianId = req.params.gid;
 
+        console.log("Call id => " + sid);
+        console.log("Call Status => " + callStatus);
+        console.log("To => " + to)
+        console.log("From => " + from)
+        console.log("Tablet id => " + tabid)
+        console.log("Patient Id => " + patientId)
+
+        switch (callStatus) {
+            case "ringing":
+                console.log(`Call is ringing for user ${to} in Abdul Hamid Patel's workspace.`);
+                break;
+            case "answered":
+                console.log(`Call answered by user ${to} in Abdul Hamid Patel's workspace.`);
+                break;
+            case "completed":
+                if (slotType === "Morning") {
+                    //create an new schema with same tablet id for nextdate
+                    const now = new Date();
+                    const newivr = new IVR({
+                        guardianId,
+                        patientId,
+                        tabletId:tabid,
+                        PatientPhoneNo:to,
+                        MorningCallStatus: true,
+                        callid: sid,
+                        Date:now.toLocaleDateString('en-IN')
+                    });
+
+                    const savedivr = await newivr.save();
+
+                    return res.status(200).json(
+                        { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
+                    );
+                } else if (slotType === "Afternoon") {
+
+                } else if (slotType === "Evening") {
+
+                }
+                console.log(`Call completed for user ${to} in Abdul Hamid Patel's workspace.`);
+                break;
+            case "no-answer":
+                console.log(`Call not picked up by user ${to} in Abdul Hamid Patel's workspace.`);
+                await client.messages.create({
+                    body: 'Alert : Call Missed by the User',
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                    to: to //this phonenumber should be of guardian...
+                });
+                break;
+            case "busy":
+                console.log(`Call rejected (busy) by user ${to} in Abdul Hamid Patel's workspace.`);
+                break;
+            case "failed":
+                console.log(`Call failed for user ${to} in Abdul Hamid Patel's workspace.`);
+                break;
+            case "canceled":
+                console.log(`Call canceled for user ${to} in Abdul Hamid Patel's workspace.`);
+                break;
+            default:
+                console.log(`Unknown call status: ${callStatus} for user ${to} in Abdul Hamid Patel's workspace.`);
+        }
+
+        return res.status(200).json({ success: true })
+
+    } catch (error) {
+        console.log("Internal Server error" + error);
+        return res.status(500).json(
+            {
+                error: "Internal Server error" + error
+            }
+        )
+    }
+})
 
 
 
