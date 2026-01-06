@@ -26,9 +26,13 @@ const demofunction = (count) => {
     console.log("Our Cron is getting executed inside the REST based GET Request =>" + count)
 }
 
+let task = null; //demo cron job
+let morningTask = null;
+let afternoonTask = null;
+let eveningTask = null;
 router.get("/", (req, res) => {
     var count = 0;
-    const task = cron.schedule('* * * * * *', () => {
+    task = cron.schedule('* * * * * *', () => {
         count += 1;
         demofunction(count);
         if (count == 10) {
@@ -38,6 +42,8 @@ router.get("/", (req, res) => {
     });
     res.send("This is the Home Page URL Calling from Backend");
 });
+
+
 
 
 router.post("/auth/signup", async (req, res) => {
