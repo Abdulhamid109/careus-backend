@@ -292,7 +292,7 @@ router.post("/addtablets", async (req, res) => {
             success: true,
             message: "Successfully added the tablets and created the instance of IVR",
             tablets: savedTablet,
-            IVR: savedIVR
+            // IVR: savedIVR
         });
     } catch (error) {
         console.log("Internal Server Error:", error);
@@ -680,8 +680,11 @@ router.post('/ivr/makecall', async (req, res) => {
             const hr = Math.floor(callathour);
             const min = Math.floor((callathour - hr) * 60);
 
+            //update the scheudling status
+            const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { MorningScheduleRunning: true });
 
-            cron.schedule(`${min} ${hr} * * *`, async () => {
+
+            morningTask = cron.schedule(`${min} ${hr} * * *`, async () => {
                 // schedular need to be done on this...
                 console.log("started")
                 const call = await client.calls.create({
@@ -713,8 +716,11 @@ router.post('/ivr/makecall', async (req, res) => {
             console.log("Scheduling hour => " + callathour); //decomal time
             const hr = Math.floor(callathour);
             const min = Math.floor((callathour - hr) * 60);
+            //update the scheudling status
+            const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { AfternoonScheduleRunning: true });
 
-            cron.schedule(`${min} ${hr + 12} * * *`, async () => {
+
+            afternoonTask = cron.schedule(`${min} ${hr + 12} * * *`, async () => {
                 // schedular need to be done on this...
                 const call = await client.calls.create({
                     url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
@@ -744,8 +750,11 @@ router.post('/ivr/makecall', async (req, res) => {
             console.log("Scheduling hour => " + callathour); //decomal time
             const hr = Math.floor(callathour);
             const min = Math.floor((callathour - hr) * 60);
+            //update the scheudling status
+            const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { EveningScheduleRunning: true });
 
-            cron.schedule(`${min} ${hr + 12} * * *`, async () => {
+
+            eveningTask = cron.schedule(`${min} ${hr + 12} * * *`, async () => {
                 // schedular need to be done on this...
                 const call = await client.calls.create({
                     url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
@@ -814,6 +823,26 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
                 break;
             case "completed":
                 if (slotType === "Morning") {
+                    //reduce the value of course duration by one
+                    const tabletdb = await Tablet.findById(tabid);
+                    const duration = await tabletdb["CourseDuration"];
+                    const tabdb = await Tablet.findOneAndUpdate({_id:tabid},{CourseDuration:parseInt(duration)-1});
+                    
+                    if(parseInt(tabdb["CourseDuration"])==0){
+                        //send an alert message of tablets been finised
+                        await client.messages.create({
+                            body:"Alert :Tablets finised!!.. i.e course duration expired!!",
+                            from:process.env.TWILIO_PHONE_NUMBER,
+                            // to: `+91${phoneno}`
+                            to:"+919860573041"
+
+                        });
+
+                        return res.status(404).json({
+                            error:"Course duration expired!!"
+                        })
+                    }
+
                     //create an new schema with same tablet id for nextdate
                     const now = new Date();
                     const newivr = new IVR({
@@ -832,6 +861,25 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
                         { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
                     );
                 } else if (slotType === "Afternoon") {
+                    //reduce the value of course duration by one
+                    const tabletdb = await Tablet.findById(tabid);
+                    const duration = await tabletdb["CourseDuration"];
+                    const tabdb = await Tablet.findOneAndUpdate({_id:tabid},{CourseDuration:parseInt(duration)-1});
+                    
+                    if(parseInt(tabdb["CourseDuration"])==0){
+                        //send an alert message of tablets been finised
+                        await client.messages.create({
+                            body:"Alert :Tablets finised!!.. i.e course duration expired!!",
+                            from:process.env.TWILIO_PHONE_NUMBER,
+                            // to: `+91${phoneno}`
+                            to:"+919860573041"
+
+                        });
+
+                        return res.status(404).json({
+                            error:"Course duration expired!!"
+                        })
+                    }
                     const now = new Date();
                     const newivr = new IVR({
                         guardianId,
@@ -850,6 +898,25 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
                     );
 
                 } else if (slotType === "Evening") {
+                    //reduce the value of course duration by one
+                    const tabletdb = await Tablet.findById(tabid);
+                    const duration = await tabletdb["CourseDuration"];
+                    const tabdb = await Tablet.findOneAndUpdate({_id:tabid},{CourseDuration:parseInt(duration)-1});
+                    
+                    if(parseInt(tabdb["CourseDuration"])==0){
+                        //send an alert message of tablets been finised
+                        await client.messages.create({
+                            body:"Alert :Tablets finised!!.. i.e course duration expired!!",
+                            from:process.env.TWILIO_PHONE_NUMBER,
+                            // to: `+91${phoneno}`
+                            to:"+919860573041"
+
+                        });
+
+                        return res.status(404).json({
+                            error:"Course duration expired!!"
+                        })
+                    }
                     const now = new Date();
                     const newivr = new IVR({
                         guardianId,
@@ -877,7 +944,7 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
                     body: `Alert : Call Missed by the ${name}`,
                     from: process.env.TWILIO_PHONE_NUMBER,
                     // to: `+91${phoneno}` //this phonenumber should be of guardian...(done)
-                    to:to
+                    to: to
                 });
                 break;
             case "busy":
@@ -889,7 +956,7 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
                     body: `Alert : Call Missed by the ${name}`,
                     from: process.env.TWILIO_PHONE_NUMBER,
                     // to: `+91${phoneno}` //this phonenumber should be of guardian...(done)
-                    to:to
+                    to: to
                 });
                 break;
             case "canceled":
@@ -898,7 +965,7 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
                     body: `Alert : Call Missed by the ${name}`,
                     from: process.env.TWILIO_PHONE_NUMBER,
                     // to: `+91${phoneno}` //this phonenumber should be of guardian...(done)
-                    to:to
+                    to: to
                 });
                 break;
             default:
@@ -920,6 +987,130 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
 // need to focus on duration that after the duration is over the cronjob for particular tablet is should stop
 // and the user should have the permission to chnage the duration and based on that modify the cron job
 // once the duration is over the guardian should recive an alert for particular tablet.
+
+router.put("/morningjobstop/:tabid", async (req, res) => {
+    try {
+        const tabId = req.params.tabid;
+        if (!tabId) {
+            console.log("No tablet id found");
+            return res.status(401).json({
+                error: "No tablet id found!!"
+            });
+        }
+
+
+        morningTask.stop(); //stopped the morning task
+        const tabdb = await Tablet.findByIdAndUpdate(tabId, { MorningScheduleRunning: false });
+        return res.status(200).json(
+            {
+                success: true,
+                message: "Morning Job Stopped",
+                tabletdetails: tabdb
+            }
+        );
+
+    } catch (e) {
+        return res.status(500).json(
+            {
+                error: "Internal Server error " + e
+            }
+        )
+    }
+});
+
+//re-start the stopped schedule
+router.put("/morningjobstart/:tabid/:gid", async (req, res) => {
+    try {
+        const tabId = req.params.tabid;
+        const gId = req.params.gid;
+        if (!tabId) {
+            console.log("No tablet id found");
+            return res.status(401).json({
+                error: "No tablet id found!!"
+            });
+        }
+        //before starting the same schedule again we need to check the duration..
+
+
+        const tabletdb = await Tablet.findOne({_id:tabId});
+        const duration = await tabletdb["CourseDuration"];
+
+        const guardiandb = await user.findOne({_id:gId});
+        const phoneNumber = await guardiandb["phoneno"];
+
+        if(parseInt(duration)!=0){
+            morningTask.start(); //here we have started the schdule again
+        const tabdb = await Tablet.findByIdAndUpdate(tabId, { MorningScheduleRunning: true });
+        return res.status(200).json(
+            {
+                success: true,
+                message: "Morning Job Stopped",
+                tabletdetails: tabdb
+            }
+        );
+        }
+        await client.messages.create({
+            body:"Alert : Course duration expired update the duration!",
+            from:process.env.TWILIO_PHONE_NUMBER,
+            // to:`+91${phoneNumber}`
+            to:"+919860573041"
+        });
+
+        return res.status(200).json(
+            {
+                message:"alert message already transfered to the guardians account"
+            }
+        )
+        
+
+    } catch (error) {
+        console.log("Internal Server error" + error);
+        return res.status(500).json(
+            { error: "Internal Server error " + error }
+        )
+    }
+});
+
+router.put("/afternoonjobstop/:tabid/:gid",async (req,res)=>{
+    try {
+         const tabId = req.params.tabid;
+        if (!tabId) {
+            console.log("No tablet id found");
+            return res.status(401).json({
+                error: "No tablet id found!!"
+            });
+        }
+
+
+        morningTask.stop(); //stopped the morning task
+        const tabdb = await Tablet.findByIdAndUpdate(tabId, { MorningScheduleRunning: false });
+        return res.status(200).json(
+            {
+                success: true,
+                message: "Morning Job Stopped",
+                tabletdetails: tabdb
+            }
+        );
+    } catch (error) {
+        console.log("Internal Server error"+error);
+        return res.status(500).json(
+            {error:"Internal Server errror"+error}
+        )
+    }
+});
+
+router.put("/afternoonjobstart/:tabid/:gid",async(req,res)=>{
+    try {
+        
+    } catch (error) {
+        console.log("Internal Server error"+error);
+        return res.status(500).json(
+            {error:"Internal Server error"+error}
+        )
+    }
+})
+
+
 
 
 
