@@ -681,7 +681,7 @@ router.post('/ivr/makecall', async (req, res) => {
       const min = Math.floor((callathour - hr) * 60);
 
       //update the scheudling status
-      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "MorningSlot.MorningScheduleRunning": true });
+      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "MorningSlot.ScheduleRunning": true });
 
 
       morningTask = cron.schedule(`${min} ${hr} * * *`, async () => {
@@ -717,7 +717,7 @@ router.post('/ivr/makecall', async (req, res) => {
       const hr = Math.floor(callathour);
       const min = Math.floor((callathour - hr) * 60);
       //update the scheudling status
-      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "AfternoonSlot.AfternoonScheduleRunning": true });
+      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "AfternoonSlot.ScheduleRunning": true });
 
 
       afternoonTask = cron.schedule(`${min} ${hr + 12} * * *`, async () => {
@@ -751,7 +751,7 @@ router.post('/ivr/makecall', async (req, res) => {
       const hr = Math.floor(callathour);
       const min = Math.floor((callathour - hr) * 60);
       //update the scheudling status
-      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "EveningSlot.EveningScheduleRunning": true });
+      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "EveningSlot.ScheduleRunning": true });
 
 
       eveningTask = cron.schedule(`${min} ${hr + 12} * * *`, async () => {
@@ -1000,7 +1000,7 @@ router.put("/morningjobstop/:tabid", async (req, res) => {
 
 
     morningTask.stop(); //stopped the morning task
-    const tabdb = await Tablet.findByIdAndUpdate(tabId, {$set:{ "MorningSlot.MorningScheduleRunning": false }},{new:true});
+    const tabdb = await Tablet.findByIdAndUpdate(tabId, {$set:{ "MorningSlot.ScheduleRunning": false }},{new:true});
     return res.status(200).json(
       {
         success: true,
@@ -1040,7 +1040,7 @@ router.put("/morningjobstart/:tabid/:gid", async (req, res) => {
 
     if (parseInt(duration) != 0) {
       morningTask.start(); //here we have started the schdule again
-      const tabdb = await Tablet.findByIdAndUpdate(tabId, {$set:{ "MorningSlot.MorningScheduleRunning": true }},{new:true});
+      const tabdb = await Tablet.findByIdAndUpdate(tabId, {$set:{ "MorningSlot.ScheduleRunning": true }},{new:true});
       return res.status(200).json(
         {
           success: true,
@@ -1086,7 +1086,7 @@ router.put("/afternoonjobstop/:tabid", async (req, res) => {
       tabId,
       {
         $set:
-          { "AfternoonSlot.AfternoonScheduleRunning": false }
+          { "AfternoonSlot.ScheduleRunning": false }
       },
       { new: true }
     );
@@ -1130,7 +1130,7 @@ router.put("/afternoonjobstart/:tabid/:gid", async (req, res) => {
         tabId,
         {
           $set: {
-            "AfternoonSlot.AfternoonScheduleRunning": true
+            "AfternoonSlot.ScheduleRunning": true
           }
         },
         { new: true }
@@ -1181,7 +1181,7 @@ router.put("/eveningjobstop/:tabid",async(req,res)=>{
       tabId,
       {
         $set:
-          { "EveningSlot.EveningScheduleRunning": false }
+          { "EveningSlot.ScheduleRunning": false }
       },
       { new: true }
     );
@@ -1222,7 +1222,7 @@ router.put("/eveningjobstart/:tabid/:gid",async (req,res)=>{
         tabId,
         {
           $set: {
-            "EveningSlot.EveningScheduleRunning": true
+            "EveningSlot.ScheduleRunning": true
           }
         },
         { new: true }

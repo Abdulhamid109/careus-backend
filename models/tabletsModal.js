@@ -25,7 +25,7 @@ const TabletModal = new mongoose.Schema({
         SlotSelected:Boolean,
         SlotStartTime:String,
         SlotEndTime:String,
-        MorningScheduleRunning:{
+        ScheduleRunning:{
             type:Boolean,
             default:false,
         },
@@ -34,7 +34,7 @@ const TabletModal = new mongoose.Schema({
         SlotSelected:Boolean,
         SlotStartTime:String,
         SlotEndTime:String,
-        AfternoonScheduleRunning:{
+        ScheduleRunning:{
             type:Boolean,
             default:false,
         },
@@ -43,7 +43,7 @@ const TabletModal = new mongoose.Schema({
         SlotSelected:Boolean,
         SlotStartTime:String,
         SlotEndTime:String,
-        EveningScheduleRunning:{
+        ScheduleRunning:{
             type:Boolean,
             default:false,
         },
