@@ -681,7 +681,7 @@ router.post('/ivr/makecall', async (req, res) => {
       const min = Math.floor((callathour - hr) * 60);
 
       //update the scheudling status
-      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { MorningScheduleRunning: true });
+      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "MorningSlot.MorningScheduleRunning": true });
 
 
       morningTask = cron.schedule(`${min} ${hr} * * *`, async () => {
@@ -717,7 +717,7 @@ router.post('/ivr/makecall', async (req, res) => {
       const hr = Math.floor(callathour);
       const min = Math.floor((callathour - hr) * 60);
       //update the scheudling status
-      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { AfternoonScheduleRunning: true });
+      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "AfternoonSlot.AfternoonScheduleRunning": true });
 
 
       afternoonTask = cron.schedule(`${min} ${hr + 12} * * *`, async () => {
@@ -751,7 +751,7 @@ router.post('/ivr/makecall', async (req, res) => {
       const hr = Math.floor(callathour);
       const min = Math.floor((callathour - hr) * 60);
       //update the scheudling status
-      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { EveningScheduleRunning: true });
+      const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "EveningSlot.EveningScheduleRunning": true });
 
 
       eveningTask = cron.schedule(`${min} ${hr + 12} * * *`, async () => {
@@ -1258,10 +1258,6 @@ router.put("/eveningjobstart/:tabid/:gid",async (req,res)=>{
       }
     )
   }
-})
-
-
-
-
+});
 
 module.exports = router;
