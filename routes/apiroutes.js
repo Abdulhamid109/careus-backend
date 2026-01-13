@@ -37,6 +37,8 @@ router.get("/", (req, res) => {
     demofunction(count);
     if (count == 10) {
       console.log("Cron Job stopped on 10th execution");
+      const now= new Date();
+      console.log("Date =>"+now.toLocaleDateString('en-IN'))
       task.stop();
     }
   });
@@ -1259,5 +1261,46 @@ router.put("/eveningjobstart/:tabid/:gid",async (req,res)=>{
     )
   }
 });
+
+//for displaying purpose--i guess not required..with tablets model everything will workout ...
+router.post("/getIVR/:tid",async(req,res)=>{
+  try{
+    const tabletid = req.params.tid;
+    // const tabletdb = await Tablet.findById(tabletid);
+    const {date} = await req.body;
+    console.log("Date from frontend!!"+date);
+    const ivrdb = await IVR.findOne({tabletId:tabletid},{Date:date});
+    if(!ivrdb){
+      console.log("NO IVR CALL ASSOCIATED TO THE TABLET");
+      return res.status(404).json(
+        {error:"Data not found!!"}
+      )
+    }
+    return res.status(200).json(
+      {
+        success:true,
+        "message":"Successfully fetched the ivr data",
+        "ivr":ivrdb
+      }
+    )
+  }catch(error){
+    console.log("Internal Server error"+error);
+    return res.status(500).json(
+      {error:"Internal Server error"+error}
+    )
+  }
+});
+
+//updating the IVR status based on the call
+router.put("/updateIVR/:tabid",async(req,res)=>{
+  try {
+    
+  } catch (error) {
+     console.log("Internal Server error"+error);
+    return res.status(500).json(
+      {error:"Internal Server error"+error}
+    )
+  }
+})
 
 module.exports = router;
