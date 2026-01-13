@@ -5,7 +5,7 @@ const { connect } = require("./Config/dbconfig");
 dotenv.config()
 const app = express();
 const apiRoutes = require("./routes/apiroutes");
-connect;
+// connect;
 
 app.use(cors({origin:"*"}));
 app.use(express.json())

@@ -30,9 +30,8 @@ const IVRModal = new mongoose.Schema({
     callid:{
         type:String
     },
-
     Date:{
-        type:Date,
+        type:String,
     },
 
 });

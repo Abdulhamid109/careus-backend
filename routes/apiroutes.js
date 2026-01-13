@@ -254,7 +254,7 @@ router.post("/addtablets", async (req, res) => {
 
     const now = new Date();
     console.log("My Date => " + now.toLocaleDateString('en-IN'))
-
+    
 
     // TODO:IVR schema needs to be created from here needs to be scheduled from here
     // The Schedular should be stopped after 30 days from now...
@@ -262,12 +262,13 @@ router.post("/addtablets", async (req, res) => {
     const pN = await patientdb["phoneNumber"];
     console.log(pN);
 
+    //for demonstration purpose later will change
     // const newIvr = new IVR({
     //     guardianId,
     //     patientId,
     //     tabletId: savedTablet._id,
     //     PatientPhoneNo: pN,
-    //     Date: now.toLocaleString('en-IN')
+    //     Date: now.toLocaleDateString('en-IN')
     // });
 
     // const savedIVR = await newIvr.save();
@@ -375,7 +376,7 @@ router.get('/getallpatients/:id', async (req, res) => {
         { error: "Un-authorized user" }
       )
     }
-    const userdb = await patient.find({ guardianId: uid });
+    const userdb = await patient.find({ guardianId: uid }).sort({createdAt:-1});
     if (!userdb) {
       res.status(403).json(
         { error: "No Patients Found" }
@@ -890,7 +891,7 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
             PatientPhoneNo: to,
             MorningCallStatus: true,
             callid: sid,
-            Date: now.toLocaleDateString('en-IN') //small issue make sure you make the time instance from date to zero....
+            Date: now.toLocaleDateString('en-IN') 
           });
 
           const savedivr = await newivr.save();
@@ -1269,7 +1270,7 @@ router.post("/getIVR/:tid",async(req,res)=>{
     // const tabletdb = await Tablet.findById(tabletid);
     const {date} = await req.body;
     console.log("Date from frontend!!"+date);
-    const ivrdb = await IVR.findOne({tabletId:tabletid},{Date:date});
+    const ivrdb = await IVR.find({tabletId:tabletid,Date:date});
     if(!ivrdb){
       console.log("NO IVR CALL ASSOCIATED TO THE TABLET");
       return res.status(404).json(
@@ -1301,6 +1302,73 @@ router.put("/updateIVR/:tabid",async(req,res)=>{
       {error:"Internal Server error"+error}
     )
   }
+});
+
+//should be only based on date
+router.get('/getMorningMedStatus/:tid',async(req,res)=>{
+  try {
+    const tabid =  req.params.tid;
+    const tabletdb = await Tablet.findOne({_id:tabid});
+    const now = new Date();
+    const ivrdb = await IVR.findOne({tabletId:tabid,Date:now.toLocaleDateString('en-IN')});
+    console.log("IVR-DB => "+ivrdb)
+    ivrdb.get
+
+    if(ivrdb.MorningCallStatus && ivrdb.Date===now.toLocaleDateString('en-IN')){
+      
+      if(await tabletdb.MorningSlot.SlotSelected){
+      const startTime=await tabletdb.MorningSlot.SlotStartTime
+      const endTime = await tabletdb.MorningSlot.SlotEndTime
+      const { starthour, startMinute, endhour, endMinute } = TimeSplitter(startTime, endTime);
+      console.log(starthour);
+      console.log(endhour);
+      console.log(startMinute);
+      console.log(endMinute);
+      SlotType = "Morning";
+
+      //lets find the difference between the starttime and endtime (consider only hours)
+      const callno = (endhour - starthour) / 2;
+      console.log("call no time " + callno);
+      const callathour = starthour + callno;
+      console.log("Scheduling hour => " + callathour); //decomal time
+      const hr = Math.floor(callathour);
+      const min = Math.floor((callathour - hr) * 60);
+
+      const now = new Date();
+      const currenthr = now.getHours();
+      if(currenthr>hr){
+        console.log("IVR status not updated!!");
+        return res.status(200).json(
+          {success:true,
+            message:"Failed",
+          }
+        )
+      }
+      if(currenthr<hr){
+        console.log("Ivr call still not performed!!");
+        return res.status(200).json(
+          {success:true,
+            message:"Pending",
+          }
+        );
+      }
+
+     }
+    }else{
+      console.log("Morning Call already happend!!")
+    }
+     
+     return res.status(404).json(
+      {error:"Morning Slot Not Selected!!"}
+     )
+
+  } catch (error) {
+    console.log("Internal Server error"+error);
+    return res.status(500).json(
+      {error:"Internal Server error"+error}
+    )
+  }
 })
+
 
 module.exports = router;
