@@ -578,9 +578,10 @@ router.get("/tabletInfo/:id", async (req, res) => {
 
 // creating an twilio client
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-router.post('/ivr/voice', (req, res) => {
+router.post('/ivr/voice/:gid', (req, res) => {
   try {
 
+    const guardianId = req.params.gid;
     const twiml = new twilio.twiml.VoiceResponse();
     twiml.say({
       voice: 'alice',
@@ -589,14 +590,14 @@ router.post('/ivr/voice', (req, res) => {
 
     const gather = twiml.gather({
       numDigits: 1,
-      action: '/api/ivr/gather',
+      action: `/api/ivr/gather/${guardianId}`,
       method: "POST",
       timeout: 5
     });
 
 
     gather.say("Please Press a number");
-    twiml.redirect('/ivr/voice');
+    twiml.redirect(`/ivr/voice/${guardianId}`);
     res.type('text/xml');
     res.send(twiml.toString());
 
@@ -608,7 +609,12 @@ router.post('/ivr/voice', (req, res) => {
   }
 });
 
-router.post('/ivr/gather', (req, res) => {
+router.post('/ivr/gather/:gid', async(req, res) => {
+  const guardianId = req.params.gid;
+  const guardianDb = await user.findById(guardianId);
+  if(guardianDb){
+    console.log("Something went wrong......guardian cannot be found!!")
+  }
   const twiml = new twilio.twiml.VoiceResponse();
   console.log("Body" + JSON.stringify(req.body));
   const digits = req.body.Digits;
@@ -630,13 +636,16 @@ router.post('/ivr/gather', (req, res) => {
         break;
       case '2':
         //function to update the status of the call in the database
-        twiml.say("Please contact you guardian if you have any inconsistancy..");
-        twiml.hangup();
+        twiml.say("Please contact you guardian by pressing 3 if you have any inconsistancy..");
+        twiml.redirect(`/ivr/voice/${guardianId}`);
         break;
       case '3':
         //function to update the status of the call in the database
-        twiml.say("We will be shorly connecting your call to your guardian ..for demo hunging the call");
-        twiml.hangup();
+        twiml.say("We will be shorly connecting your call to your guardian");
+        const dial = twiml.dial();
+        // dial.number(guardianDb.phoneno);
+        dial.number('+919860573041')
+        // twiml.hangup();
         break;
       default:
         twiml.say('Invalid option. Please try again.');
@@ -645,7 +654,7 @@ router.post('/ivr/gather', (req, res) => {
   }
 
 
-  twiml.redirect('/ivr/voice');
+  twiml.redirect(`/ivr/voice/${guardianId}`);
   res.type('text/xml');
   res.send(twiml.toString());
 });
@@ -691,7 +700,7 @@ router.post('/ivr/makecall', async (req, res) => {
         // schedular need to be done on this...
         console.log("started")
         const call = await client.calls.create({
-          url: "https://217b052016b2.ngrok-free.app/api/ivr/voice",
+          url: `https://217b052016b2.ngrok-free.app/api/ivr/voice/${guardianId}`,
           to: "+919860573041",
           from: process.env.TWILIO_PHONE_NUMBER,
           statusCallback: `https://217b052016b2.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
@@ -1304,7 +1313,7 @@ router.put("/updateIVR/:tabid",async(req,res)=>{
   }
 });
 
-//should be only based on date
+//not need this route can be handled on frontedn only
 router.get('/getMorningMedStatus/:tid',async(req,res)=>{
   try {
     const tabid =  req.params.tid;
