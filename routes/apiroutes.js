@@ -624,7 +624,7 @@ router.post('/ivr/gather/:gid', async(req, res) => {
       { voice: 'alice', language: 'en-IN' },
       'Sorry, I did not receive any input. Please try again.'
     );
-    twiml.redirect('/api/ivr/voice');
+    twiml.redirect(`/api/ivr/voice/${guardianId}`);
   } else {
     switch (digits) {
       case '1':
@@ -696,7 +696,7 @@ router.post('/ivr/makecall', async (req, res) => {
       const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "MorningSlot.ScheduleRunning": true });
 
 
-      morningTask = cron.schedule(`${min} ${hr} * * *`, async () => {
+      morningTask = cron.schedule(`50 7 * * *`, async () => {
         // schedular need to be done on this...
         console.log("started")
         const call = await client.calls.create({
