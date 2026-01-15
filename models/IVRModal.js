@@ -3,38 +3,65 @@ const mongoose = require("mongoose");
 
 
 const IVRModal = new mongoose.Schema({
-    guardianId:{
-        type:String
+    guardianId: {
+        type: String
     },
-    patientId:{
-        type:String
+    patientId: {
+        type: String
     },
-    tabletId:{
-        type:String
+    tabletId: {
+        type: String
     },
-    PatientPhoneNo:{
-        type:String
+    PatientPhoneNo: {
+        type: String
     },
-    MorningCallStatus:{
-        type:Boolean,
-        default:false
+    MorningSlot: {
+        SlotType: {
+            type: String,
+            default: "Morning"
+        },
+        MorningCallStatus: {
+            type: Boolean,
+            default: false
+        },
+        callid: {
+            type: String
+        },
     },
-    AfternoonCallStatus:{
-        type:Boolean,
-        default:false
+    AfternoonSlot: {
+        SlotType: {
+            type: String,
+            default: "Afternoon"
+        },
+        AfternoonCallStatus: {
+            type: Boolean,
+            default: false
+        },
+        callid: {
+            type: String
+        },
     },
-    EveningCallStatus:{
-        type:Boolean,
-        default:false
+
+
+    EveningSlot: {
+        SlotType: {
+            type: String,
+            default: "Evening"
+        },
+        EveningCallStatus: {
+            type: Boolean,
+            default: false
+        },
+        callid: {
+            type: String
+        },
     },
-    callid:{
-        type:String
-    },
-    Date:{
-        type:String,
+
+    Date: {
+        type: String,
     },
 
 });
 
-const IVR = mongoose.models.ivr || mongoose.model('ivr',IVRModal);
+const IVR = mongoose.models.ivr || mongoose.model('ivr', IVRModal);
 module.exports = IVR;

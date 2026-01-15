@@ -37,8 +37,8 @@ router.get("/", (req, res) => {
     demofunction(count);
     if (count == 10) {
       console.log("Cron Job stopped on 10th execution");
-      const now= new Date();
-      console.log("Date =>"+now.toLocaleDateString('en-IN'))
+      const now = new Date();
+      console.log("Date =>" + now.toLocaleDateString('en-IN'))
       task.stop();
     }
   });
@@ -254,7 +254,7 @@ router.post("/addtablets", async (req, res) => {
 
     const now = new Date();
     console.log("My Date => " + now.toLocaleDateString('en-IN'))
-    
+
 
     // TODO:IVR schema needs to be created from here needs to be scheduled from here
     // The Schedular should be stopped after 30 days from now...
@@ -376,7 +376,7 @@ router.get('/getallpatients/:id', async (req, res) => {
         { error: "Un-authorized user" }
       )
     }
-    const userdb = await patient.find({ guardianId: uid }).sort({createdAt:-1});
+    const userdb = await patient.find({ guardianId: uid }).sort({ createdAt: -1 });
     if (!userdb) {
       res.status(403).json(
         { error: "No Patients Found" }
@@ -408,6 +408,8 @@ router.delete('/deletePatient/:pid', async (req, res) => {
       )
     }
     const deletePatient = await patient.findByIdAndDelete(p_uid);
+    // and also delete all the associated with that patient
+    const deleteAllTablets = await patient.findOneAndDelete({ patientId: p_uid })
     return res.status(200).json(
       {
         "success": true,
@@ -609,10 +611,10 @@ router.post('/ivr/voice/:gid', (req, res) => {
   }
 });
 
-router.post('/ivr/gather/:gid', async(req, res) => {
+router.post('/ivr/gather/:gid', async (req, res) => {
   const guardianId = req.params.gid;
   const guardianDb = await user.findById(guardianId);
-  if(guardianDb){
+  if (guardianDb) {
     console.log("Something went wrong......guardian cannot be found!!")
   }
   const twiml = new twilio.twiml.VoiceResponse();
@@ -642,7 +644,10 @@ router.post('/ivr/gather/:gid', async(req, res) => {
       case '3':
         //function to update the status of the call in the database
         twiml.say("We will be shorly connecting your call to your guardian");
-        const dial = twiml.dial();
+        const dial = twiml.dial({
+          action: '/api/ivr/handle-dial-status', 
+          timeout:10
+        });
         // dial.number(guardianDb.phoneno);
         dial.number('+919860573041')
         // twiml.hangup();
@@ -658,6 +663,23 @@ router.post('/ivr/gather/:gid', async(req, res) => {
   res.type('text/xml');
   res.send(twiml.toString());
 });
+
+
+router.post('/ivr/handle-dial-status', (req, res) => {
+  const twiml = new twilio.twiml.VoiceResponse();
+  const dialCallStatus = req.body.DialCallStatus;
+
+  if (dialCallStatus === 'completed') {
+    twiml.say('Your call to the guardian has ended. Goodbye.');
+  } else if (dialCallStatus === 'no-answer' || dialCallStatus === 'failed' || dialCallStatus === 'busy') {
+    twiml.say('We were unable to connect your call. Please try again later.');
+    twiml.hangup();
+  }
+
+  res.type('text/xml');
+  res.send(twiml.toString());
+});
+
 
 
 
@@ -696,7 +718,7 @@ router.post('/ivr/makecall', async (req, res) => {
       const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "MorningSlot.ScheduleRunning": true });
 
 
-      morningTask = cron.schedule(`50 7 * * *`, async () => {
+      morningTask = cron.schedule(`${min} ${hr} * * *`, async () => {
         // schedular need to be done on this...
         console.log("started")
         const call = await client.calls.create({
@@ -840,7 +862,7 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
           const duration = await tabletdb["CourseDuration"];
           const tabdb = await Tablet.findOneAndUpdate({ _id: tabid }, { CourseDuration: parseInt(duration) - 1 });
 
-          if (parseInt(tabdb["CourseDuration"]) == 0) {
+          if (parseInt(tabdb["CourseDuration"]-1) == 0) {
             //send an alert message of tablets been finised
             await client.messages.create({
               body: "Alert :Tablets finised!!.. i.e course duration expired!!",
@@ -856,29 +878,54 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
           }
 
           //create an new schema with same tablet id for nextdate
-          const now = new Date();
-          const newivr = new IVR({
-            guardianId,
-            patientId,
+          const ivrdb = await IVR.findOne({
             tabletId: tabid,
-            PatientPhoneNo: to,
-            MorningCallStatus: true,
-            callid: sid,
-            Date: now.toLocaleDateString('en-IN') //small issue make sure you make the time instance from date to zero....
+            patientId: patientId,
+            Date: now.toLocaleDateString('en-IN'),
+            "MorningSlot.SlotType": "Morning"
           });
 
-          const savedivr = await newivr.save();
+          if (!ivrdb) {
+            const now = new Date();
+            const newivr = new IVR({
+              guardianId,
+              patientId,
+              tabletId: tabid,
+              PatientPhoneNo: to,
+              "MorningSlot.MorningCallStatus": true,
+              "MorningSlot.callid": sid,
+              Date: now.toLocaleDateString('en-IN')
+            });
+            const savedivr = await newivr.save();
+            return res.status(200).json(
+              { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
+            );
+          }
+
+          //updating the value to true
+          const ivrDB = await IVR.findOneAndUpdate({
+            tabletId: tabid,
+            patientId: patientId,
+            Date: now.toLocaleDateString('en-IN'),
+            "MorningSlot.SlotType": "Morning"
+          },{"MorningSlot.MorningCallStatus":true});
 
           return res.status(200).json(
-            { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
-          );
+              { success: true, message: "Successfully updated the IVR drama", ivr: ivrDB }
+            );
+
+
+
+
+
+
         } else if (slotType === "Afternoon") {
           //reduce the value of course duration by one
           const tabletdb = await Tablet.findById(tabid);
           const duration = await tabletdb["CourseDuration"];
           const tabdb = await Tablet.findOneAndUpdate({ _id: tabid }, { CourseDuration: parseInt(duration) - 1 });
 
-          if (parseInt(tabdb["CourseDuration"]) == 0) {
+          if (parseInt(tabdb["CourseDuration"]-1) == 0) {
             //send an alert message of tablets been finised
             await client.messages.create({
               body: "Alert :Tablets finised!!.. i.e course duration expired!!",
@@ -892,22 +939,44 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
               error: "Course duration expired!!"
             })
           }
-          const now = new Date();
-          const newivr = new IVR({
-            guardianId,
-            patientId,
+
+          //create an new schema with same tablet id for nextdate
+          const ivrdb = await IVR.findOne({
             tabletId: tabid,
-            PatientPhoneNo: to,
-            MorningCallStatus: true,
-            callid: sid,
-            Date: now.toLocaleDateString('en-IN') 
+            patientId: patientId,
+            Date: now.toLocaleDateString('en-IN'),
+            "AfternoonSlot.SlotType": "Afternoon"
           });
 
-          const savedivr = await newivr.save();
+
+          if (!ivrdb) {
+            const now = new Date();
+            const newivr = new IVR({
+              guardianId,
+              patientId,
+              tabletId: tabid,
+              PatientPhoneNo: to,
+              "AfternoonSlot.AfternoonCallStatus": true,
+              "AfternoonSlot.callid": sid,
+              Date: now.toLocaleDateString('en-IN')
+            });
+            const savedivr = await newivr.save();
+            return res.status(200).json(
+              { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
+            );
+          }
+          
+
+          const ivrDB = await IVR.findOneAndUpdate({
+            tabletId: tabid,
+            patientId: patientId,
+            Date: now.toLocaleDateString('en-IN'),
+            "AfternoonSlot.SlotType": "Afternoon"
+          },{"AfternoonSlot.AfternoonCallStatus":true});
 
           return res.status(200).json(
-            { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
-          );
+              { success: true, message: "Successfully updated the IVR drama", ivr: ivrDB }
+            );
 
         } else if (slotType === "Evening") {
           //reduce the value of course duration by one
@@ -915,7 +984,7 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
           const duration = await tabletdb["CourseDuration"];
           const tabdb = await Tablet.findOneAndUpdate({ _id: tabid }, { CourseDuration: parseInt(duration) - 1 });
 
-          if (parseInt(tabdb["CourseDuration"]) == 0) {
+          if (parseInt(tabdb["CourseDuration"]-1) == 0) {
             //send an alert message of tablets been finised
             await client.messages.create({
               body: "Alert :Tablets finised!!.. i.e course duration expired!!",
@@ -929,23 +998,44 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
               error: "Course duration expired!!"
             })
           }
-          const now = new Date();
-          const newivr = new IVR({
-            guardianId,
-            patientId,
+
+          //create an new schema with same tablet id for nextdate
+          const ivrdb = await IVR.findOne({
             tabletId: tabid,
-            PatientPhoneNo: to,
-            MorningCallStatus: true,
-            callid: sid,
-            Date: now.toLocaleDateString('en-IN') //small issue make sure you make the time instance from date to zero....
+            patientId: patientId,
+            Date: now.toLocaleDateString('en-IN'),
+            "AfternoonSlot.SlotType": "Afternoon"
           });
 
-          const savedivr = await newivr.save();
+         
+          if (!ivrdb) {
+            const now = new Date();
+            const newivr = new IVR({
+              guardianId,
+              patientId,
+              tabletId: tabid,
+              PatientPhoneNo: to,
+              "EveningSlot.EveningCallStatus": true,
+              "EveningSlot.callid": sid,
+              Date: now.toLocaleDateString('en-IN')
+            });
+            const savedivr = await newivr.save();
+            return res.status(200).json(
+              { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
+            );
+          }
+          
+
+          const ivrDB = await IVR.findOneAndUpdate({
+            tabletId: tabid,
+            patientId: patientId,
+            Date: now.toLocaleDateString('en-IN'),
+            "EveningSlot.SlotType": "Evening"
+          },{"EveningSlot.EveningCallStatus":true});
 
           return res.status(200).json(
-            { success: true, message: "Successfully created the ivr data based on the users answer", ivr: savedivr }
-          );
-
+              { success: true, message: "Successfully updated the IVR drama", ivr: ivrDB }
+            );
         }
         console.log(`Call completed for user ${to} in Abdul Hamid Patel's workspace.`);
         break;
@@ -961,6 +1051,12 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
         break;
       case "busy":
         console.log(`Call rejected (busy) by user ${to} in Abdul Hamid Patel's workspace.`);
+        await client.messages.create({
+          body: `Alert : Call Missed by the ${name}`,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          // to: `+91${phoneno}` //this phonenumber should be of guardian...(done)
+          to: to
+        });
         break;
       case "failed":
         console.log(`Call failed for user ${to} in Abdul Hamid Patel's workspace.`);
@@ -1012,7 +1108,7 @@ router.put("/morningjobstop/:tabid", async (req, res) => {
 
 
     morningTask.stop(); //stopped the morning task
-    const tabdb = await Tablet.findByIdAndUpdate(tabId, {$set:{ "MorningSlot.ScheduleRunning": false }},{new:true});
+    const tabdb = await Tablet.findByIdAndUpdate(tabId, { $set: { "MorningSlot.ScheduleRunning": false } }, { new: true });
     return res.status(200).json(
       {
         success: true,
@@ -1052,7 +1148,7 @@ router.put("/morningjobstart/:tabid/:gid", async (req, res) => {
 
     if (parseInt(duration) != 0) {
       morningTask.start(); //here we have started the schdule again
-      const tabdb = await Tablet.findByIdAndUpdate(tabId, {$set:{ "MorningSlot.ScheduleRunning": true }},{new:true});
+      const tabdb = await Tablet.findByIdAndUpdate(tabId, { $set: { "MorningSlot.ScheduleRunning": true } }, { new: true });
       return res.status(200).json(
         {
           success: true,
@@ -1178,8 +1274,8 @@ router.put("/afternoonjobstart/:tabid/:gid", async (req, res) => {
   }
 });
 
-router.put("/eveningjobstop/:tabid",async(req,res)=>{
-  try{
+router.put("/eveningjobstop/:tabid", async (req, res) => {
+  try {
     const tabId = req.params.tabid;
     if (!tabId) {
       console.log("No tablet id found");
@@ -1204,12 +1300,12 @@ router.put("/eveningjobstop/:tabid",async(req,res)=>{
         tabletdetails: tabdb
       }
     );
-  }catch(error){
+  } catch (error) {
     console.log("Internal Server error")
   }
 });
 
-router.put("/eveningjobstart/:tabid/:gid",async (req,res)=>{
+router.put("/eveningjobstart/:tabid/:gid", async (req, res) => {
   try {
     const tabId = req.params.tabid;
     const gId = req.params.gid;
@@ -1263,118 +1359,163 @@ router.put("/eveningjobstart/:tabid/:gid",async (req,res)=>{
 
 
   } catch (error) {
-    console.log("Internal Server error"+error);
+    console.log("Internal Server error" + error);
     return res.status(500).json(
       {
-        error:"Internal Server error =>"+error
+        error: "Internal Server error =>" + error
       }
     )
   }
 });
 
 //for displaying purpose--i guess not required..with tablets model everything will workout ...
-router.post("/getIVR/:tid",async(req,res)=>{
-  try{
+router.post("/getIVR/:tid/:pid", async (req, res) => {
+  try {
     const tabletid = req.params.tid;
-    // const tabletdb = await Tablet.findById(tabletid);
-    const {date} = await req.body;
-    console.log("Date from frontend!!"+date);
-    const ivrdb = await IVR.find({tabletId:tabletid,Date:date});
-    if(!ivrdb){
-      console.log("NO IVR CALL ASSOCIATED TO THE TABLET");
+    const patientid = req.params.pid;
+    const tabletdb = await Tablet.findById(tabletid);
+    // instead of getting everything in one we can use the ivr data fetching based on the slotselcted
+    const { date } = await req.body;
+    var MorningCallStatus;
+    var AfternoonCallStatus;
+    var EveningCallStatus;
+
+    // for morningcallStatus
+    if (tabletdb.MorningSlot.SlotSelected && tabletdb.MorningSlot.ScheduleRunning) {
+      const morningIVRData = await IVR.findOne({patientId:patientid, tabletId: tabletid, Date: date,"MorningSlot.SlotType":"Morning" });
+      MorningCallStatus = morningIVRData.MorningSlot.MorningCallStatus;
+      console.log(`Morning Call Status for ${date} is ${MorningCallStatus}`);
+      if (!morningIVRData) {
+      console.log("NO MORNING IVR CALL ASSOCIATED TO THE TABLET");
       return res.status(404).json(
-        {error:"Data not found!!"}
+        { error: "Data not found!!" }
       )
     }
+    }
+    
+    // for afternooncallstatus
+    if(tabletdb.AfternoonSlot.SlotSelected && tabletdb.AfternoonSlot.ScheduleRunning){
+            const AfternoonIVRData = await IVR.findOne({patientId:patientid, tabletId: tabletid, Date: date,"AfternoonSlot.SlotType":"Afternoon" });
+      AfternoonCallStatus = AfternoonIVRData.AfternoonSlot.AfternoonCallStatus;
+      console.log(`Afternoon Call Status for ${date} is ${AfternoonCallStatus}`);
+      if (!AfternoonIVRData) {
+      console.log("NO Afternoon IVR CALL ASSOCIATED TO THE TABLET");
+      return res.status(404).json(
+        { error: "Data not found!!" }
+      )
+    }
+    }
+
+    if(tabletdb.EveningSlot.SlotSelected && tabletdb.EveningSlot.ScheduleRunning){
+      const EveningIVRData = await IVR.findOne({patientId:patientid, tabletId: tabletid, Date: date,"EveningSlot.SlotType":"Evening" });
+      EveningCallStatus = EveningIVRData.EveningSlot.EveningCallStatus;
+      console.log(`Evening Call Status for ${date} is ${EveningCallStatus}`);
+      if (!AfternoonIVRData) {
+      console.log("NO EVENING IVR CALL ASSOCIATED TO THE TABLET");
+      return res.status(404).json(
+        { error: "Data not found!!" }
+      )
+    }
+    }
+
+   
+
+
     return res.status(200).json(
       {
-        success:true,
-        "message":"Successfully fetched the ivr data",
-        "ivr":ivrdb
+        success: true,
+        "message": "Successfully fetched the ivr data",
+        "MorningCallStatus": MorningCallStatus,
+        "AfternoonCallStatus":AfternoonCallStatus,
+        "EveningCallStatus":EveningCallStatus
+
+
       }
     )
-  }catch(error){
-    console.log("Internal Server error"+error);
+  } catch (error) {
+    console.log("Internal Server error" + error);
     return res.status(500).json(
-      {error:"Internal Server error"+error}
+      { error: "Internal Server error" + error }
     )
   }
 });
 
 //updating the IVR status based on the call
-router.put("/updateIVR/:tabid",async(req,res)=>{
+router.put("/updateIVR/:tabid", async (req, res) => {
   try {
-    
+
   } catch (error) {
-     console.log("Internal Server error"+error);
+    console.log("Internal Server error" + error);
     return res.status(500).json(
-      {error:"Internal Server error"+error}
+      { error: "Internal Server error" + error }
     )
   }
 });
 
 //not need this route can be handled on frontedn only
-router.get('/getMorningMedStatus/:tid',async(req,res)=>{
+router.get('/getMorningMedStatus/:tid', async (req, res) => {
   try {
-    const tabid =  req.params.tid;
-    const tabletdb = await Tablet.findOne({_id:tabid});
+    const tabid = req.params.tid;
+    const tabletdb = await Tablet.findOne({ _id: tabid });
     const now = new Date();
-    const ivrdb = await IVR.findOne({tabletId:tabid,Date:now.toLocaleDateString('en-IN')});
-    console.log("IVR-DB => "+ivrdb)
+    const ivrdb = await IVR.findOne({ tabletId: tabid, Date: now.toLocaleDateString('en-IN') });
+    console.log("IVR-DB => " + ivrdb)
     ivrdb.get
 
-    if(ivrdb.MorningCallStatus && ivrdb.Date===now.toLocaleDateString('en-IN')){
-      
-      if(await tabletdb.MorningSlot.SlotSelected){
-      const startTime=await tabletdb.MorningSlot.SlotStartTime
-      const endTime = await tabletdb.MorningSlot.SlotEndTime
-      const { starthour, startMinute, endhour, endMinute } = TimeSplitter(startTime, endTime);
-      console.log(starthour);
-      console.log(endhour);
-      console.log(startMinute);
-      console.log(endMinute);
-      SlotType = "Morning";
+    if (ivrdb.MorningCallStatus && ivrdb.Date === now.toLocaleDateString('en-IN')) {
 
-      //lets find the difference between the starttime and endtime (consider only hours)
-      const callno = (endhour - starthour) / 2;
-      console.log("call no time " + callno);
-      const callathour = starthour + callno;
-      console.log("Scheduling hour => " + callathour); //decomal time
-      const hr = Math.floor(callathour);
-      const min = Math.floor((callathour - hr) * 60);
+      if (await tabletdb.MorningSlot.SlotSelected) {
+        const startTime = await tabletdb.MorningSlot.SlotStartTime
+        const endTime = await tabletdb.MorningSlot.SlotEndTime
+        const { starthour, startMinute, endhour, endMinute } = TimeSplitter(startTime, endTime);
+        console.log(starthour);
+        console.log(endhour);
+        console.log(startMinute);
+        console.log(endMinute);
+        SlotType = "Morning";
 
-      const now = new Date();
-      const currenthr = now.getHours();
-      if(currenthr>hr){
-        console.log("IVR status not updated!!");
-        return res.status(200).json(
-          {success:true,
-            message:"Failed",
-          }
-        )
+        //lets find the difference between the starttime and endtime (consider only hours)
+        const callno = (endhour - starthour) / 2;
+        console.log("call no time " + callno);
+        const callathour = starthour + callno;
+        console.log("Scheduling hour => " + callathour); //decomal time
+        const hr = Math.floor(callathour);
+        const min = Math.floor((callathour - hr) * 60);
+
+        const now = new Date();
+        const currenthr = now.getHours();
+        if (currenthr > hr) {
+          console.log("IVR status not updated!!");
+          return res.status(200).json(
+            {
+              success: true,
+              message: "Failed",
+            }
+          )
+        }
+        if (currenthr < hr) {
+          console.log("Ivr call still not performed!!");
+          return res.status(200).json(
+            {
+              success: true,
+              message: "Pending",
+            }
+          );
+        }
+
       }
-      if(currenthr<hr){
-        console.log("Ivr call still not performed!!");
-        return res.status(200).json(
-          {success:true,
-            message:"Pending",
-          }
-        );
-      }
-
-     }
-    }else{
+    } else {
       console.log("Morning Call already happend!!")
     }
-     
-     return res.status(404).json(
-      {error:"Morning Slot Not Selected!!"}
-     )
+
+    return res.status(404).json(
+      { error: "Morning Slot Not Selected!!" }
+    )
 
   } catch (error) {
-    console.log("Internal Server error"+error);
+    console.log("Internal Server error" + error);
     return res.status(500).json(
-      {error:"Internal Server error"+error}
+      { error: "Internal Server error" + error }
     )
   }
 })
