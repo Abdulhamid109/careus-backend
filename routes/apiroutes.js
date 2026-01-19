@@ -613,10 +613,8 @@ router.post('/ivr/voice/:gid', (req, res) => {
 
 router.post('/ivr/gather/:gid', async (req, res) => {
   const guardianId = req.params.gid;
-  const guardianDb = await user.findById(guardianId);
-  if (guardianDb) {
-    console.log("Something went wrong......guardian cannot be found!!")
-  }
+  const guardianDb = await user.findOne({_id:guardianId});
+ 
   const twiml = new twilio.twiml.VoiceResponse();
   console.log("Body" + JSON.stringify(req.body));
   const digits = req.body.Digits;
@@ -696,7 +694,7 @@ router.post('/ivr/makecall', async (req, res) => {
     const AfternoonSlotEndTime = AfternoonSlot.SlotEndTime;
     const EveningSlotStartTime = EveningSlot.SlotStartTime;
     const EveningSlotEndTime = EveningSlot.SlotEndTime;
-    var SlotType = '';
+    // let SlotType;
 
     if (IsMorningSlot) {
       const { starthour, startMinute, endhour, endMinute } = TimeSplitter(MorningSlotStartTime, MorningSlotEndTime);
@@ -704,7 +702,7 @@ router.post('/ivr/makecall', async (req, res) => {
       console.log(endhour);
       console.log(startMinute);
       console.log(endMinute);
-      SlotType = "Morning";
+      const SlotType = "Morning";
 
       //lets find the difference between the starttime and endtime (consider only hours)
       const callno = (endhour - starthour) / 2;
@@ -722,10 +720,10 @@ router.post('/ivr/makecall', async (req, res) => {
         // schedular need to be done on this...
         console.log("started")
         const call = await client.calls.create({
-          url: `https://217b052016b2.ngrok-free.app/api/ivr/voice/${guardianId}`,
+          url: `https://9232c84d3cbc.ngrok-free.app/api/ivr/voice/${guardianId}`,
           to: "+919860573041",
           from: process.env.TWILIO_PHONE_NUMBER,
-          statusCallback: `https://217b052016b2.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
+          statusCallback: `https://9232c84d3cbc.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
           statusCallbackMethod: "POST",
           statusCallbackEvent: ["initiated", "ringing", "answered", "completed"]
         },
@@ -752,15 +750,15 @@ router.post('/ivr/makecall', async (req, res) => {
       const min = Math.floor((callathour - hr) * 60);
       //update the scheudling status
       const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "AfternoonSlot.ScheduleRunning": true });
+      const SlotType = "Afternoon";
 
-
-      afternoonTask = cron.schedule(`${min} ${hr + 12} * * *`, async () => {
+      afternoonTask = cron.schedule(`${min} ${hr+12} * * *`, async () => {
         // schedular need to be done on this...
         const call = await client.calls.create({
-          url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
+          url: `https://9232c84d3cbc.ngrok-free.app/api/ivr/voice/${guardianId}`,
           to: "+919860573041",
           from: process.env.TWILIO_PHONE_NUMBER,
-          statusCallback: `https://217b052016b2.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
+          statusCallback: `https://9232c84d3cbc.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
           statusCallbackMethod: "POST",
           statusCallbackEvent: ["initiated", "ringing", "answered", "completed"]
 
@@ -786,15 +784,16 @@ router.post('/ivr/makecall', async (req, res) => {
       const min = Math.floor((callathour - hr) * 60);
       //update the scheudling status
       const tabdb = await Tablet.findOneAndUpdate({ _id: tabletid }, { "EveningSlot.ScheduleRunning": true });
+      const SlotType = "Evening";
 
 
       eveningTask = cron.schedule(`${min} ${hr + 12} * * *`, async () => {
         // schedular need to be done on this...
         const call = await client.calls.create({
-          url: "https://d57e2f4019b7.ngrok-free.app/api/ivr/voice",
+          url: `https://9232c84d3cbc.ngrok-free.app/api/ivr/voice/${guardianId}`,
           to: "+919860573041",
           from: process.env.TWILIO_PHONE_NUMBER,
-          statusCallback: `https://217b052016b2.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
+          statusCallback: `https://9232c84d3cbc.ngrok-free.app/api/ivr/call-status/${tabletid}/${SlotType}/${pid}/${guardianId}`,
           statusCallbackMethod: "POST",
           statusCallbackEvent: ["initiated", "ringing", "answered", "completed"]
 
@@ -878,6 +877,7 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
           }
 
           //create an new schema with same tablet id for nextdate
+          const now = new Date();
           const ivrdb = await IVR.findOne({
             tabletId: tabid,
             patientId: patientId,
@@ -941,6 +941,7 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
           }
 
           //create an new schema with same tablet id for nextdate
+          const now = new Date();
           const ivrdb = await IVR.findOne({
             tabletId: tabid,
             patientId: patientId,
@@ -1000,6 +1001,7 @@ router.post('/ivr/call-status/:tabletid/:slottype/:pid/:gid', async (req, res) =
           }
 
           //create an new schema with same tablet id for nextdate
+          const now = new Date();
           const ivrdb = await IVR.findOne({
             tabletId: tabid,
             patientId: patientId,
@@ -1368,77 +1370,60 @@ router.put("/eveningjobstart/:tabid/:gid", async (req, res) => {
   }
 });
 
-//for displaying purpose--i guess not required..with tablets model everything will workout ...
 router.post("/getIVR/:tid/:pid", async (req, res) => {
   try {
-    const tabletid = req.params.tid;
-    const patientid = req.params.pid;
+    const { tid: tabletid, pid: patientid } = req.params;
+    console.log(tabletid,patientid);
+    const { date } = req.body;
+    console.log(date)
+
     const tabletdb = await Tablet.findById(tabletid);
-    // instead of getting everything in one we can use the ivr data fetching based on the slotselcted
-    const { date } = await req.body;
-    var MorningCallStatus;
-    var AfternoonCallStatus;
-    var EveningCallStatus;
-
-    // for morningcallStatus
-    if (tabletdb.MorningSlot.SlotSelected && tabletdb.MorningSlot.ScheduleRunning) {
-      const morningIVRData = await IVR.findOne({patientId:patientid, tabletId: tabletid, Date: date,"MorningSlot.SlotType":"Morning" });
-      MorningCallStatus = morningIVRData.MorningSlot.MorningCallStatus;
-      console.log(`Morning Call Status for ${date} is ${MorningCallStatus}`);
-      if (!morningIVRData) {
-      console.log("NO MORNING IVR CALL ASSOCIATED TO THE TABLET");
-      return res.status(404).json(
-        { error: "Data not found!!" }
-      )
-    }
-    }
-    
-    // for afternooncallstatus
-    if(tabletdb.AfternoonSlot.SlotSelected && tabletdb.AfternoonSlot.ScheduleRunning){
-            const AfternoonIVRData = await IVR.findOne({patientId:patientid, tabletId: tabletid, Date: date,"AfternoonSlot.SlotType":"Afternoon" });
-      AfternoonCallStatus = AfternoonIVRData.AfternoonSlot.AfternoonCallStatus;
-      console.log(`Afternoon Call Status for ${date} is ${AfternoonCallStatus}`);
-      if (!AfternoonIVRData) {
-      console.log("NO Afternoon IVR CALL ASSOCIATED TO THE TABLET");
-      return res.status(404).json(
-        { error: "Data not found!!" }
-      )
-    }
+    if (!tabletdb) {
+      return res.status(404).json({ error: "Tablet not found" });
     }
 
-    if(tabletdb.EveningSlot.SlotSelected && tabletdb.EveningSlot.ScheduleRunning){
-      const EveningIVRData = await IVR.findOne({patientId:patientid, tabletId: tabletid, Date: date,"EveningSlot.SlotType":"Evening" });
-      EveningCallStatus = EveningIVRData.EveningSlot.EveningCallStatus;
-      console.log(`Evening Call Status for ${date} is ${EveningCallStatus}`);
-      if (!AfternoonIVRData) {
-      console.log("NO EVENING IVR CALL ASSOCIATED TO THE TABLET");
-      return res.status(404).json(
-        { error: "Data not found!!" }
-      )
-    }
-    }
+    const ivrData = await IVR.findOne({
+      patientId: patientid,
+      tabletId: tabletid,
+      Date: date
+    });
 
-   
+    console.log("IVR Data => "+ivrData)
 
+    let MorningCallStatus = null;
+    let AfternoonCallStatus = null;
+    let EveningCallStatus = null;
 
-    return res.status(200).json(
-      {
-        success: true,
-        "message": "Successfully fetched the ivr data",
-        "MorningCallStatus": MorningCallStatus,
-        "AfternoonCallStatus":AfternoonCallStatus,
-        "EveningCallStatus":EveningCallStatus
-
-
+    if (ivrData) {
+      if (tabletdb.MorningSlot?.SlotSelected && tabletdb.MorningSlot?.ScheduleRunning) {
+        MorningCallStatus = ivrData.MorningSlot?.MorningCallStatus ?? null;
       }
-    )
+
+      if (tabletdb.AfternoonSlot?.SlotSelected && tabletdb.AfternoonSlot?.ScheduleRunning) {
+        AfternoonCallStatus = ivrData.AfternoonSlot?.AfternoonCallStatus ?? null;
+      }
+
+      if (tabletdb.EveningSlot?.SlotSelected && tabletdb.EveningSlot?.ScheduleRunning) {
+        EveningCallStatus = ivrData.EveningSlot?.EveningCallStatus ?? null;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Successfully fetched IVR data",
+      MorningCallStatus,
+      AfternoonCallStatus,
+      EveningCallStatus
+    });
+
   } catch (error) {
-    console.log("Internal Server error" + error);
-    return res.status(500).json(
-      { error: "Internal Server error" + error }
-    )
+    console.error("Internal Server error:", error);
+    return res.status(500).json({
+      error: "Internal Server error"
+    });
   }
 });
+
 
 //updating the IVR status based on the call
 router.put("/updateIVR/:tabid", async (req, res) => {
